@@ -20,8 +20,13 @@ const GOA_HEADERS = {
   'Origin'         : 'https://goagamea.com',
   'Referer'        : 'https://goagamea.com/',
   'User-Agent'     : 'Mozilla/5.0 (Linux; Android 11; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
-  'x-forwarded-for': '103.100.' + Math.floor(Math.random()*255) + '.' + Math.floor(Math.random()*255),
+  'x-forwarded-for': '103.21.' + Math.floor(Math.random()*255) + '.' + Math.floor(Math.random()*255),
+  'CF-IPCountry'   : 'IN',
+  'X-Country-Code' : 'IN',
 };
+
+// goaRequest with retry on multiple domains
+const GOA_DOMAINS = ['https://api.goagamea.com', 'https://www.goagamea.com'];
 
 // ══════════════════════════════════════════════════
 //  ACCOUNT STORE  (phone → session)
@@ -167,14 +172,20 @@ function makeState(phone) {
 // ══════════════════════════════════════════════════
 async function goaRequest(endpoint, payload, token) {
   var headers = { ...GOA_HEADERS };
+  // Randomize IP each request
+  headers['x-forwarded-for'] = '103.' + Math.floor(Math.random()*50+1) + '.' + Math.floor(Math.random()*255) + '.' + Math.floor(Math.random()*255);
   if (token) headers['Authorization'] = 'Bearer ' + token;
-  try {
-    var r = await axios.post(GOA_BASE + endpoint, payload, { headers, timeout: 12000 });
-    return r.data;
-  } catch(e) {
-    var msg = e.response ? JSON.stringify(e.response.data) : e.message;
-    throw new Error('GoaAPI ' + endpoint + ': ' + msg);
+  var lastErr = null;
+  for (var domain of GOA_DOMAINS) {
+    try {
+      var r = await axios.post(domain + endpoint, payload || {}, { headers, timeout: 15000 });
+      return r.data;
+    } catch(e) {
+      lastErr = e.response ? JSON.stringify(e.response.data) : e.message;
+      console.log('[KP] Domain ' + domain + ' failed: ' + lastErr);
+    }
   }
+  throw new Error('GoaAPI ' + endpoint + ': ' + lastErr);
 }
 
 // GET captcha
