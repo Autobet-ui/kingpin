@@ -257,26 +257,40 @@ const server = http.createServer(app);
 const io     = new Server(server, { cors: { origin: '*' } });
 
 app.use(express.json());
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  next();
+});
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── REST PROXY ROUTES ──
 app.post('/api/goa/captcha', async (req, res) => {
   try {
+    console.log('[KP] Captcha request received');
     var data = await getCaptcha();
+    console.log('[KP] Captcha response code:', data && data.code);
     res.json(data);
   } catch(e) {
+    console.error('[KP] Captcha error:', e.message);
     res.json({ code: -1, msg: e.message });
   }
 });
 
 app.post('/api/goa/login', async (req, res) => {
   try {
+    console.log('[KP] Login request received for:', req.body && req.body.username);
     var data = await loginGoa(req.body);
+    console.log('[KP] Login response code:', data && data.code);
     res.json(data);
   } catch(e) {
+    console.error('[KP] Login error:', e.message);
     res.json({ code: -1, msg: e.message });
   }
 });
+
+// Health check
+app.get('/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
 // ── SOCKET.IO ──
 io.on('connection', (socket) => {
