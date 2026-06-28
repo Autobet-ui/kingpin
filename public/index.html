@@ -1397,11 +1397,7 @@
     try {
       var res = await fetch('https://api.goagamea.com/api/webapi/GetCaptcha', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Origin': 'https://goagamea.com',
-          'Referer': 'https://goagamea.com/',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({})
       });
       var data = await res.json();
@@ -1499,11 +1495,7 @@
 
       var res = await fetch('https://api.goagamea.com/api/webapi/Login', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Origin': 'https://goagamea.com',
-          'Referer': 'https://goagamea.com/',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(loginPayload)
       });
       var data = await res.json();
