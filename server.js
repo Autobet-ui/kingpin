@@ -27,15 +27,15 @@ app.use(express.static(path.join(__dirname, 'public')));
 // ─────────────────────────────────────────────────────────
 // GOA API CONFIG
 // ─────────────────────────────────────────────────────────
-const GOA_BASE  = 'https://api.goaclub999.com';
-const LOTTERY_BASE = 'https://lottery.goaclub999.com';
+const GOA_BASE     = 'https://api.goagamea.com';
+const LOTTERY_BASE = 'https://api.goagamea.com';
 
 const GOA_HEADERS = {
   'Content-Type': 'application/json',
   'Accept': 'application/json',
   'User-Agent': 'Mozilla/5.0 (Linux; Android 11; Mobile) AppleWebKit/537.36 Chrome/96.0.4664.45',
-  'Origin': 'https://goaclub999.com',
-  'Referer': 'https://goaclub999.com/',
+  'Origin': 'https://goagamea.com',
+  'Referer': 'https://goagamea.com/',
 };
 
 // ─────────────────────────────────────────────────────────
