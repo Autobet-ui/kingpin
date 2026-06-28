@@ -1,654 +1,624 @@
-/**
- * KINGPIN 3.0 — Auto Bet Engine Backend
- * Node.js + Express + Socket.IO
- */
+'use strict';
 
 const express   = require('express');
 const http      = require('http');
 const { Server } = require('socket.io');
 const axios     = require('axios');
-const cors      = require('cors');
 const path      = require('path');
 
-const app    = express();
-const server = http.createServer(app);
-const io     = new Server(server, {
-  cors: { origin: '*', methods: ['GET', 'POST'] },
-  pingTimeout: 30000,
-  pingInterval: 10000
-});
+// ══════════════════════════════════════════════════
+//  CONFIG
+// ══════════════════════════════════════════════════
+const PORT       = process.env.PORT || 3000;
+const GOA_BASE   = 'https://api.goagamea.com';   // Goa Games API base
+const GAME_CODE  = 'WinGo_30S';
 
-app.use(cors());
-app.use(express.json());
-
-// ── Serve static frontend files ──
-app.use(express.static(path.join(__dirname, 'public')));
-
-// ─────────────────────────────────────────────────────────
-// GOA API CONFIG
-// ─────────────────────────────────────────────────────────
-const GOA_BASE     = 'https://api.goagamea.com';
-const LOTTERY_BASE = 'https://api.goagamea.com';
-
+// Common headers to mimic the mobile app
 const GOA_HEADERS = {
-  'Content-Type': 'application/json',
-  'Accept': 'application/json',
-  'User-Agent': 'Mozilla/5.0 (Linux; Android 11; Mobile) AppleWebKit/537.36 Chrome/96.0.4664.45',
-  'Origin': 'https://goagamea.com',
-  'Referer': 'https://goagamea.com/',
+  'Content-Type'   : 'application/json',
+  'Accept'         : 'application/json',
+  'Origin'         : 'https://goagamea.com',
+  'Referer'        : 'https://goagamea.com/',
+  'User-Agent'     : 'Mozilla/5.0 (Linux; Android 11; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
+  'x-forwarded-for': '103.100.' + Math.floor(Math.random()*255) + '.' + Math.floor(Math.random()*255),
 };
 
-// ─────────────────────────────────────────────────────────
-// REST API ROUTES
-// ─────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════
+//  ACCOUNT STORE  (phone → session)
+// ══════════════════════════════════════════════════
+const accounts = {};   // phone → { lotteryToken, webapiToken, pwd, engine, state, interval }
 
-// GET CAPTCHA
-app.post('/api/goa/captcha', async (req, res) => {
-  try {
-    const r = await axios.post(`${GOA_BASE}/api/user/captcha`, {}, { headers: GOA_HEADERS, timeout: 10000 });
-    res.json(r.data);
-  } catch (e) {
-    console.error('[captcha]', e.message);
-    res.json({ code: -1, msg: e.message });
+// ══════════════════════════════════════════════════
+//  PREDICTION FORMULAS
+// ══════════════════════════════════════════════════
+const FORMULAS = {
+  kingpin3: formulaKingpin3,
+  zigzag:   formulaZigzag,
+  oracle:   formulaOracle,
+  kaala:    formulaKaala,
+  titan_v3: formulaTitan,
+  dna3:     formulaDna3,
+  // default fallback
+};
+
+function formulaKingpin3(history) {
+  if (!history || history.length < 2) return 'BIG';
+  var last = history.slice(-2).map(h => h.bs);
+  var votes = 0;
+  // 4-modular vote
+  if (last[0] === 'BIG')   votes++;
+  if (last[1] === 'SMALL') votes++;
+  if ((last[0] === 'BIG') === (last[1] === 'BIG')) votes++;
+  var streak = 1; var i = history.length - 2;
+  while (i >= 0 && history[i].bs === history[history.length-1].bs) { streak++; i--; }
+  if (streak >= 3) votes++;  // streak break
+  return votes >= 2 ? 'BIG' : 'SMALL';
+}
+
+function formulaZigzag(history) {
+  if (!history || history.length === 0) return 'BIG';
+  var last = history[history.length - 1].bs;
+  return last === 'BIG' ? 'SMALL' : 'BIG';
+}
+
+function formulaOracle(history) {
+  if (!history || history.length < 5) return formulaZigzag(history);
+  var recentBS = history.slice(-10).map(h => h.bs);
+  var bigCount = recentBS.filter(b => b === 'BIG').length;
+  var ratio = bigCount / recentBS.length;
+  // Mean reversion
+  if (ratio > 0.65) return 'SMALL';
+  if (ratio < 0.35) return 'BIG';
+  return formulaZigzag(history);
+}
+
+function formulaKaala(history) {
+  if (!history || history.length < 3) return 'BIG';
+  var h = history.slice(-18).map(h => h.bs);
+  var streak = 1;
+  for (var i = h.length - 2; i >= 0; i--) {
+    if (h[i] === h[h.length-1]) streak++; else break;
   }
-});
+  if (streak >= 4) return h[h.length-1] === 'BIG' ? 'SMALL' : 'BIG';
+  return formulaOracle(history);
+}
 
-// LOGIN
-app.post('/api/goa/login', async (req, res) => {
-  try {
-    const r = await axios.post(`${GOA_BASE}/api/user/login`, req.body, { headers: GOA_HEADERS, timeout: 12000 });
-    res.json(r.data);
-  } catch (e) {
-    console.error('[login]', e.message);
-    res.json({ code: -1, msg: e.message });
+function formulaTitan(history) {
+  if (!history || history.length < 3) return 'BIG';
+  var last3 = history.slice(-3).map(h => h.bs);
+  var losses = history.slice(-3).filter(h => h.result === 'loss').length;
+  if (losses >= 3) {
+    // Recovery: flip last prediction
+    return last3[last3.length-1] === 'BIG' ? 'SMALL' : 'BIG';
   }
-});
+  return formulaOracle(history);
+}
 
-// ── Health check ──
-app.get('/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
+function formulaDna3(history) {
+  if (!history || history.length < 3) return 'BIG';
+  var triplet = history.slice(-3).map(h => h.bs).join('-');
+  var patterns = {
+    'BIG-BIG-BIG':     'SMALL',
+    'SMALL-SMALL-SMALL': 'BIG',
+    'BIG-SMALL-BIG':   'SMALL',
+    'SMALL-BIG-SMALL': 'BIG',
+    'BIG-BIG-SMALL':   'BIG',
+    'SMALL-SMALL-BIG': 'SMALL',
+  };
+  return patterns[triplet] || formulaZigzag(history);
+}
 
-// ── Fallback to index.html ──
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+function predict(formulaKey, history) {
+  var fn = FORMULAS[formulaKey] || FORMULAS['kingpin3'];
+  try { return fn(history); } catch(e) { return 'BIG'; }
+}
 
-// ─────────────────────────────────────────────────────────
-// PER-ACCOUNT STATE
-// ─────────────────────────────────────────────────────────
-const accounts = {}; // phone → AccountState
+// ══════════════════════════════════════════════════
+//  MARTINGALE LEVELS
+// ══════════════════════════════════════════════════
+function buildLevels(baseAmt, maxLevel) {
+  var levels = [baseAmt];
+  for (var i = 1; i < maxLevel; i++) {
+    levels.push(Math.round(levels[i-1] * 2.1));
+  }
+  return levels;
+}
 
-function makeAccount(phone) {
+// ══════════════════════════════════════════════════
+//  ACCOUNT STATE (default)
+// ══════════════════════════════════════════════════
+function makeState(phone) {
   return {
     phone,
-    lotteryToken: '',
-    webapiToken: '',
-    pwd: '',
-    balance: 0,
-    engine: 'stopped',
-    formula: 'PATTERN3',
-    levels: [2, 4, 8, 16, 32, 64, 128],
-    baseAmt: 2,
-    maxLevel: 7,
-    stopOnWin: false,
-    stopOnWinAmt: 100,
-    stopOnLoss: false,
-    stopOnLossAmt: 500,
-    watchCount: 3,
-    currentLevel: 0,
-    pnl: 0,
-    bets: 0,
-    wins: 0,
-    losses: 0,
-    log: [],
-    betHistory: [],
-    predHistory: [],
-    currentPeriod: '',
-    currentPred: '',
-    countdown: 0,
-    interval: null,
-    periodInterval: null,
-    betPlaced: false,
-    watchRemain: 0,
-    lastResult: null,
-    waitingResult: false,
-    resultIssue: '',
-    locked: false,
-    maxLevelHit: false,
+    lotteryToken : '',
+    webapiToken  : '',
+    pwd          : '',
+    engine       : 'stopped',   // stopped | running
+    balance      : 0,
+    wins         : 0,
+    losses       : 0,
+    pnl          : 0,
+    level        : 1,
+    highestLevel : 1,
+    formula      : 'kingpin3',
+    formulaInfo  : { name: '👑 KINGPIN 3.0' },
+    baseAmt      : 2,
+    maxLevel     : 10,
+    levels       : buildLevels(2, 10),
+    watchEnabled : false,
+    watchLossTarget : 1,
+    watchCount   : 0,
+    history      : [],    // [{issue, number, bs, pred, result}]
+    betHistory   : [],
+    predHistory  : [],
+    logs         : [],
+    currentIssue : null,
+    prediction   : null,
+    sessionStart : null,
+    sessionElapsed: 0,
+    loggedIn     : true,
+    // nexus
+    nexus        : false,
   };
 }
 
-function getAccount(phone) {
-  if (!accounts[phone]) accounts[phone] = makeAccount(phone);
-  return accounts[phone];
+// ══════════════════════════════════════════════════
+//  GOA GAMES API CALLS
+// ══════════════════════════════════════════════════
+async function goaRequest(endpoint, payload, token) {
+  var headers = { ...GOA_HEADERS };
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  try {
+    var r = await axios.post(GOA_BASE + endpoint, payload, { headers, timeout: 12000 });
+    return r.data;
+  } catch(e) {
+    var msg = e.response ? JSON.stringify(e.response.data) : e.message;
+    throw new Error('GoaAPI ' + endpoint + ': ' + msg);
+  }
 }
 
-// ─────────────────────────────────────────────────────────
-// LOTTERY HELPERS
-// ─────────────────────────────────────────────────────────
-async function getBalance(acct) {
-  try {
-    const r = await axios.get(`${GOA_BASE}/api/user/info`, {
-      headers: { ...GOA_HEADERS, 'Authorization': `Bearer ${acct.webapiToken}` },
-      timeout: 8000
-    });
-    if (r.data && r.data.code === 0 && r.data.data) {
-      acct.balance = parseFloat(r.data.data.balance || r.data.data.money || 0);
-    }
-  } catch(e) { /* silent */ }
+// GET captcha
+async function getCaptcha() {
+  return await goaRequest('/api/webapi/GetCaptcha', {});
 }
 
-async function getCurrentPeriod(acct) {
-  try {
-    const r = await axios.get(
-      `${LOTTERY_BASE}/api/lottery/wingo/currentissue?lotteryType=1`,
-      { headers: { ...GOA_HEADERS, 'Authorization': `Bearer ${acct.lotteryToken}` }, timeout: 8000 }
-    );
-    if (r.data && r.data.code === 0 && r.data.data) {
-      return r.data.data;
-    }
-  } catch(e) { /* silent */ }
+// POST login
+async function loginGoa(payload) {
+  return await goaRequest('/api/webapi/Login', payload);
+}
+
+// GET balance
+async function getBalance(token) {
+  var r = await goaRequest('/api/webapi/GetUserInfo', {}, token);
+  if (r && r.code === 0 && r.data) return parseFloat(r.data.money || r.data.balance || 0);
+  return 0;
+}
+
+// GET current issue / countdown
+async function getCurrentIssue(token) {
+  var r = await goaRequest('/api/webapi/GetGameIssue', { gameCode: GAME_CODE }, token);
+  if (r && r.code === 0 && r.data) return r.data;
   return null;
 }
 
-async function getLastResult(acct) {
-  try {
-    const r = await axios.get(
-      `${LOTTERY_BASE}/api/lottery/wingo/listissue?lotteryType=1&pageSize=5&pageNum=1`,
-      { headers: { ...GOA_HEADERS, 'Authorization': `Bearer ${acct.lotteryToken}` }, timeout: 8000 }
-    );
-    if (r.data && r.data.code === 0 && r.data.data && r.data.data.list) {
-      return r.data.data.list[0] || null;
-    }
-  } catch(e) { /* silent */ }
+// GET last result
+async function getLastResult(token) {
+  var r = await goaRequest('/api/webapi/GetGameResult', { gameCode: GAME_CODE, pageNo: 1, pageSize: 1 }, token);
+  if (r && r.code === 0 && r.data && r.data.list && r.data.list[0]) return r.data.list[0];
   return null;
 }
 
-async function placeBet(acct, side, amount) {
-  // side: 'BIG' or 'SMALL'
-  const betContent = side === 'BIG' ? 'WinGo_Big' : 'WinGo_Small';
-  try {
-    const r = await axios.post(
-      `${LOTTERY_BASE}/api/lottery/wingo/bet`,
-      {
-        issueNumber: acct.currentPeriod,
-        betContent,
-        betAmount: amount,
-        lotteryType: 1,
-      },
-      { headers: { ...GOA_HEADERS, 'Authorization': `Bearer ${acct.lotteryToken}` }, timeout: 8000 }
-    );
-    return r.data;
-  } catch(e) {
-    return { code: -1, msg: e.message };
-  }
+// GET history for prediction
+async function getHistory(token, size) {
+  var r = await goaRequest('/api/webapi/GetGameResult', { gameCode: GAME_CODE, pageNo: 1, pageSize: size || 20 }, token);
+  if (r && r.code === 0 && r.data && r.data.list) return r.data.list;
+  return [];
 }
 
-async function getBetRecord(acct, page = 1) {
-  try {
-    const r = await axios.get(
-      `${LOTTERY_BASE}/api/lottery/wingo/mybet?lotteryType=1&pageSize=10&pageNum=${page}`,
-      { headers: { ...GOA_HEADERS, 'Authorization': `Bearer ${acct.lotteryToken}` }, timeout: 10000 }
-    );
-    return r.data;
-  } catch(e) {
-    return { code: -1, msg: e.message };
-  }
+// PLACE BET
+async function placeBet(token, issueNumber, predBS, amount) {
+  // Goa Games bet content format: WinGo_30S_Big or WinGo_30S_Small
+  var betContent = GAME_CODE + (predBS === 'BIG' ? '_Big' : '_Small');
+  var r = await goaRequest('/api/webapi/PlaceBet', {
+    gameCode    : GAME_CODE,
+    issueNumber : issueNumber,
+    betContent  : betContent,
+    betAmount   : amount,
+    multiple    : 1,
+  }, token);
+  return r;
 }
 
-async function getHistory(acct, page = 1, pageSize = 100) {
-  try {
-    const r = await axios.get(
-      `${LOTTERY_BASE}/api/lottery/wingo/listissue?lotteryType=1&pageSize=${pageSize}&pageNum=${page}`,
-      { headers: { ...GOA_HEADERS, 'Authorization': `Bearer ${acct.lotteryToken}` }, timeout: 12000 }
-    );
-    return r.data;
-  } catch(e) {
-    return { code: -1, msg: e.message };
-  }
+// GET bet record
+async function getBetRecord(token, page) {
+  return await goaRequest('/api/webapi/GetBetRecord', {
+    gameCode: GAME_CODE,
+    pageNo  : page || 1,
+    pageSize: 20,
+  }, token);
 }
 
-// ─────────────────────────────────────────────────────────
-// PREDICTION FORMULAS
-// ─────────────────────────────────────────────────────────
-function predict(formula, history) {
-  // history: array of 'BIG'/'SMALL' strings, latest first
-  if (!history || history.length === 0) return 'BIG';
+// ══════════════════════════════════════════════════
+//  EXPRESS + SOCKET.IO
+// ══════════════════════════════════════════════════
+const app    = express();
+const server = http.createServer(app);
+const io     = new Server(server, { cors: { origin: '*' } });
 
-  const last = history[0];
-  const last3 = history.slice(0, 3);
-  const last5 = history.slice(0, 5);
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
 
-  switch (formula) {
-    case 'ANTI':
-      return last === 'BIG' ? 'SMALL' : 'BIG';
+// ── REST PROXY ROUTES ──
+app.post('/api/goa/captcha', async (req, res) => {
+  try {
+    var data = await getCaptcha();
+    res.json(data);
+  } catch(e) {
+    res.json({ code: -1, msg: e.message });
+  }
+});
 
-    case 'FOLLOW':
-      return last;
+app.post('/api/goa/login', async (req, res) => {
+  try {
+    var data = await loginGoa(req.body);
+    res.json(data);
+  } catch(e) {
+    res.json({ code: -1, msg: e.message });
+  }
+});
 
-    case 'PATTERN3': {
-      // If last 3 same → switch
-      if (last3.length >= 3 && last3.every(x => x === last3[0])) {
-        return last3[0] === 'BIG' ? 'SMALL' : 'BIG';
+// ── SOCKET.IO ──
+io.on('connection', (socket) => {
+  console.log('[KP] Client connected:', socket.id);
+
+  var viewPhone = null;  // which account this socket is watching
+
+  // ─ AUTH ─
+  socket.on('auth', async (d) => {
+    var phone = d.phone;
+    if (!phone) return;
+
+    if (!accounts[phone]) accounts[phone] = makeState(phone);
+    var st = accounts[phone];
+    st.lotteryToken = d.lotteryToken || st.lotteryToken;
+    st.webapiToken  = d.webapiToken  || st.webapiToken;
+    st.pwd          = d.pwd          || st.pwd;
+    st.loggedIn     = true;
+
+    // Fetch balance
+    try { st.balance = await getBalance(st.webapiToken); } catch(e) {}
+
+    viewPhone = phone;
+    socket.join('acct:' + phone);
+
+    emitState(phone, socket);
+    broadcastAccountList();
+  });
+
+  // ─ SWITCH VIEW ─
+  socket.on('switchView', (d) => {
+    if (!d || !d.phone) return;
+    viewPhone = d.phone;
+    socket.join('acct:' + d.phone);
+    emitState(d.phone, socket);
+  });
+
+  // ─ START ENGINE ─
+  socket.on('start', async (d) => {
+    var phone = d && d.phone;
+    if (!phone || !accounts[phone]) return;
+    var st = accounts[phone];
+    if (st.engine !== 'stopped') return;
+
+    st.engine       = 'running';
+    st.sessionStart = Date.now();
+    log(phone, '▶ Engine started', 'ok');
+    emitState(phone);
+    broadcastAccountList();
+
+    startEngine(phone);
+  });
+
+  // ─ STOP ENGINE ─
+  socket.on('stop', (d) => {
+    var phone = d && d.phone;
+    if (!phone || !accounts[phone]) return;
+    var st = accounts[phone];
+    st.engine = 'stopped';
+    if (st._interval) { clearInterval(st._interval); st._interval = null; }
+    log(phone, '■ Engine stopped', 'warn');
+    emitState(phone);
+    broadcastAccountList();
+  });
+
+  // ─ LOGOUT ─
+  socket.on('logout', (d) => {
+    var phone = d && d.phone;
+    if (!phone || !accounts[phone]) return;
+    var st = accounts[phone];
+    if (st._interval) { clearInterval(st._interval); st._interval = null; }
+    delete accounts[phone];
+    io.emit('accountRemoved', { phone });
+    broadcastAccountList();
+  });
+
+  // ─ RESET STATS ─
+  socket.on('resetStats', (d) => {
+    var phone = d && d.phone;
+    if (!phone || !accounts[phone]) return;
+    var st = accounts[phone];
+    st.wins = 0; st.losses = 0; st.pnl = 0;
+    st.level = 1; st.highestLevel = 1;
+    st.betHistory = []; st.predHistory = [];
+    st.sessionStart = Date.now();
+    emitState(phone);
+  });
+
+  // ─ SET FORMULA ─
+  socket.on('setFormula', (d) => {
+    var phone = d && d.phone;
+    if (!phone || !accounts[phone]) return;
+    var st = accounts[phone];
+    st.formula = d.formula || 'kingpin3';
+    var FNAMES = {
+      kingpin3:'👑 KINGPIN 3.0', zigzag:'⚡ ZigZag', oracle:'🔮 ORACLE',
+      kaala:'🕶️ Kaala', titan_v3:'⚡ TITAN v3', dna3:'🧬 DNA 3',
+      patdb_v4:'🎯 PAT_DB v4.0', cobra_strike:'🐍 Cobra Strike',
+      itachi:'🔥 Itachi V30', kubera:'💰 Kubera v2',
+      hacksoon:'🔮 Hacksoon', n1n2:'🎲 N1/N2',
+      zn1p:'🗳️ ZN1P', eip:'🤖 EIP', kutty:'⭐ KUTTY',
+    };
+    st.formulaInfo = { name: FNAMES[st.formula] || st.formula };
+    emitState(phone);
+    log(phone, '🧠 Formula: ' + st.formulaInfo.name, 'info');
+  });
+
+  // ─ SET LEVELS ─
+  socket.on('setLevels', (d) => {
+    var phone = d && d.phone;
+    if (!phone || !accounts[phone]) return;
+    var st = accounts[phone];
+    if (d.custom && Array.isArray(d.custom)) {
+      st.levels   = d.custom;
+      st.maxLevel = d.custom.length;
+      st.baseAmt  = d.custom[0] || 2;
+    } else {
+      st.baseAmt  = d.baseAmt  || st.baseAmt;
+      st.maxLevel = d.maxLevel || st.maxLevel;
+      st.levels   = buildLevels(st.baseAmt, st.maxLevel);
+    }
+    st.level = 1;
+    emitState(phone);
+  });
+
+  // ─ SET WATCH ─
+  socket.on('setWatch', (d) => {
+    var phone = d && d.phone;
+    if (!phone || !accounts[phone]) return;
+    var st = accounts[phone];
+    st.watchEnabled    = d.enabled;
+    st.watchLossTarget = d.count || 1;
+    emitState(phone);
+  });
+
+  // ─ GET BET RECORD ─
+  socket.on('getBetRecord', async (d) => {
+    var phone = d && d.phone;
+    if (!phone || !accounts[phone]) return;
+    var st = accounts[phone];
+    try {
+      var result = await getBetRecord(st.webapiToken, d.page || 1);
+      socket.emit('betRecord', { result, page: d.page || 1 });
+    } catch(e) {
+      socket.emit('betRecord', { result: { code: -1, msg: e.message }, page: 1 });
+    }
+  });
+
+  socket.on('disconnect', () => {
+    console.log('[KP] Client disconnected:', socket.id);
+  });
+});
+
+// ══════════════════════════════════════════════════
+//  ENGINE LOOP
+// ══════════════════════════════════════════════════
+async function startEngine(phone) {
+  var st = accounts[phone];
+  if (!st) return;
+
+  var lastIssue = null;
+  var pendingBet = null;   // { issue, pred, amount, level }
+
+  async function tick() {
+    if (!accounts[phone] || st.engine !== 'running') return;
+    try {
+      // 1. Get current issue info
+      var issue = await getCurrentIssue(st.webapiToken);
+      if (!issue) return;
+
+      var issueNo  = issue.issueNumber || issue.issue;
+      var countdown = parseInt(issue.remainTime || issue.countDown || 30);
+
+      // Emit countdown
+      io.to('acct:' + phone).emit('countdown', { secs: countdown, total: 30 });
+
+      // 2. Check if new round started — fetch result for previous issue
+      if (lastIssue && issueNo !== lastIssue) {
+        var lastResult = await getLastResult(st.webapiToken);
+        if (lastResult && String(lastResult.issueNumber) === String(lastIssue)) {
+          var num  = parseInt(lastResult.number);
+          var bs   = num >= 5 ? 'BIG' : 'SMALL';
+
+          // Update history
+          st.history.push({ issue: lastIssue, number: num, bs });
+          if (st.history.length > 50) st.history = st.history.slice(-50);
+
+          // Check pending bet result
+          if (pendingBet && String(pendingBet.issue) === String(lastIssue)) {
+            var won = pendingBet.pred === bs;
+            var pnl = won ? pendingBet.amount * 0.95 : -pendingBet.amount;
+            st.pnl += pnl;
+
+            if (won) {
+              st.wins++;
+              st.level = 1;
+              log(phone, '✅ WIN  #' + String(lastIssue).slice(-5) + '  ' + bs + '  +₹' + (pendingBet.amount * 0.95).toFixed(2), 'win');
+            } else {
+              st.losses++;
+              st.level = Math.min(st.level + 1, st.maxLevel);
+              if (st.level > st.highestLevel) st.highestLevel = st.level;
+              log(phone, '❌ LOSS #' + String(lastIssue).slice(-5) + '  ' + bs + '  -₹' + pendingBet.amount, 'loss');
+            }
+
+            // Record bet history
+            st.betHistory.unshift({ issue: lastIssue, pred: pendingBet.pred, level: pendingBet.level, amount: pendingBet.amount, won, pnl: pnl });
+            if (st.betHistory.length > 100) st.betHistory = st.betHistory.slice(0, 100);
+
+            pendingBet = null;
+
+            if (st.level > st.maxLevel) {
+              st.engine = 'stopped';
+              io.to('acct:' + phone).emit('maxLevel', { msg: 'All levels exhausted. Restart to continue.' });
+              log(phone, '🚨 MAX LEVEL reached — engine stopped', 'warn');
+              emitState(phone);
+              broadcastAccountList();
+              return;
+            }
+          }
+
+          // Refresh balance
+          try { st.balance = await getBalance(st.webapiToken); } catch(e) {}
+          emitState(phone);
+          broadcastAccountList();
+        }
       }
-      return last === 'BIG' ? 'SMALL' : 'BIG';
-    }
 
-    case 'MAJORITY5': {
-      if (last5.length < 3) return last === 'BIG' ? 'SMALL' : 'BIG';
-      const bigs = last5.filter(x => x === 'BIG').length;
-      return bigs >= 3 ? 'SMALL' : 'BIG';
-    }
+      // 3. Place bet for new issue (only once per issue, with time left > 5s)
+      if (issueNo !== lastIssue) {
+        lastIssue = issueNo;
 
-    case 'NEXUS': {
-      // Alternating streak detector
-      if (last5.length >= 4) {
-        const isAlt = last5.slice(0, 4).every((v, i, a) => i === 0 || v !== a[i-1]);
-        if (isAlt) return last === 'BIG' ? 'BIG' : 'SMALL';
+        // Build prediction
+        var rawHistory = (await getHistory(st.webapiToken, 20)).map(r => ({
+          issue : r.issueNumber,
+          number: parseInt(r.number),
+          bs    : parseInt(r.number) >= 5 ? 'BIG' : 'SMALL',
+        }));
+
+        var predBS = predict(st.formula, rawHistory);
+
+        var predInfo = { pred: predBS, forIssue: issueNo, formula: st.formula };
+        st.prediction = predInfo;
+        st.predHistory.unshift({ forIssue: issueNo, pred: predBS, formula: st.formula });
+        if (st.predHistory.length > 100) st.predHistory = st.predHistory.slice(0, 100);
+
+        log(phone, '🔮 Pred #' + String(issueNo).slice(-5) + ' → ' + predBS + ' (LV' + st.level + ')', 'info');
+
+        // Watch mode: skip real bet if watching
+        if (st.watchEnabled && st.watchCount < st.watchLossTarget) {
+          st.watchCount++;
+          log(phone, '👁️ Watch mode — skipping bet (' + st.watchCount + '/' + st.watchLossTarget + ')', 'warn');
+          emitState(phone);
+          return;
+        }
+        st.watchCount = 0;
+
+        // Place bet if time allows (> 5s)
+        if (countdown > 5) {
+          var amount = st.levels[st.level - 1] || st.baseAmt;
+          io.to('acct:' + phone).emit('betStatus', {
+            cls: 'betting', icon: '💰', label: 'PLACING BET',
+            detail: predBS + '  ₹' + amount + '  LV' + st.level,
+            bar: 60,
+          });
+
+          try {
+            var betResult = await placeBet(st.webapiToken, issueNo, predBS, amount);
+            if (betResult && betResult.code === 0) {
+              pendingBet = { issue: issueNo, pred: predBS, amount, level: st.level };
+              log(phone, '💰 Bet placed: ' + predBS + ' ₹' + amount + ' #' + String(issueNo).slice(-5), 'ok');
+              io.to('acct:' + phone).emit('betStatus', {
+                cls: 'placed', icon: '✅', label: 'BET PLACED',
+                detail: predBS + '  ₹' + amount + '  LV' + st.level,
+                bar: 100,
+              });
+            } else {
+              log(phone, '⚠️ Bet failed: ' + (betResult && betResult.msg || 'unknown'), 'warn');
+            }
+          } catch(e) {
+            log(phone, '⚠️ Bet error: ' + e.message, 'warn');
+          }
+
+          emitState(phone);
+        }
       }
-      return last === 'BIG' ? 'SMALL' : 'BIG';
+
+    } catch(err) {
+      log(phone, '⚠️ Tick error: ' + err.message, 'warn');
     }
-
-    default:
-      return last === 'BIG' ? 'SMALL' : 'BIG';
   }
+
+  // Run tick every 3 seconds
+  st._interval = setInterval(tick, 3000);
+  tick();
 }
 
-// ─────────────────────────────────────────────────────────
-// ENGINE CORE
-// ─────────────────────────────────────────────────────────
-function addLog(acct, type, msg) {
-  const entry = { type, msg, ts: Date.now() };
-  acct.log.unshift(entry);
-  if (acct.log.length > 200) acct.log.pop();
-  return entry;
+// ══════════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════════
+function log(phone, msg, cls) {
+  var st = accounts[phone];
+  if (!st) return;
+  var t = new Date().toLocaleTimeString('en-IN', { hour12: false });
+  var entry = { t, msg, cls: cls || 'info' };
+  st.logs.unshift(entry);
+  if (st.logs.length > 50) st.logs = st.logs.slice(0, 50);
+  io.to('acct:' + phone).emit('log', entry);
 }
 
-function getState(acct) {
-  return {
-    phone: acct.phone,
-    balance: acct.balance,
-    engine: acct.engine,
-    formula: acct.formula,
-    levels: acct.levels,
-    baseAmt: acct.baseAmt,
-    maxLevel: acct.maxLevel,
-    stopOnWin: acct.stopOnWin,
-    stopOnWinAmt: acct.stopOnWinAmt,
-    stopOnLoss: acct.stopOnLoss,
-    stopOnLossAmt: acct.stopOnLossAmt,
-    watchCount: acct.watchCount,
-    currentLevel: acct.currentLevel,
-    pnl: acct.pnl,
-    bets: acct.bets,
-    wins: acct.wins,
-    losses: acct.losses,
-    log: acct.log,
-    betHistory: acct.betHistory,
-    predHistory: acct.predHistory,
-    currentPeriod: acct.currentPeriod,
-    currentPred: acct.currentPred,
-    countdown: acct.countdown,
-    betPlaced: acct.betPlaced,
-    watchRemain: acct.watchRemain,
-    maxLevelHit: acct.maxLevelHit,
-    loggedIn: !!acct.lotteryToken,
+function emitState(phone, target) {
+  var st = accounts[phone];
+  if (!st) return;
+  var snap = {
+    phone,
+    engine       : st.engine,
+    balance      : st.balance,
+    wins         : st.wins,
+    losses       : st.losses,
+    pnl          : st.pnl,
+    level        : st.level,
+    highestLevel : st.highestLevel,
+    formula      : st.formula,
+    formulaInfo  : st.formulaInfo,
+    levels       : st.levels,
+    watchEnabled : st.watchEnabled,
+    watchLossTarget: st.watchLossTarget,
+    betHistory   : st.betHistory,
+    predHistory  : st.predHistory,
+    prediction   : st.prediction,
+    loggedIn     : st.loggedIn,
+    sessionElapsed: st.sessionStart ? Date.now() - st.sessionStart : 0,
   };
+  if (target) {
+    target.emit('state', snap);
+    target.emit('logs', st.logs);
+  } else {
+    io.to('acct:' + phone).emit('state', snap);
+  }
 }
 
-function broadcastState(acct) {
-  io.emit('state', getState(acct));
-  // Update account list
-  const list = Object.values(accounts).map(a => ({
-    phone: a.phone,
-    engine: a.engine,
-    balance: a.balance,
-    pnl: a.pnl,
-    loggedIn: !!a.lotteryToken,
+function broadcastAccountList() {
+  var list = Object.values(accounts).map(st => ({
+    phone  : st.phone,
+    engine : st.engine,
+    balance: st.balance,
+    pnl    : st.pnl,
   }));
   io.emit('accountList', list);
 }
 
-function stopEngine(acct, reason) {
-  if (acct.interval) { clearInterval(acct.interval); acct.interval = null; }
-  acct.engine = 'stopped';
-  acct.betPlaced = false;
-  acct.waitingResult = false;
-  addLog(acct, 'warn', reason || 'Engine stopped');
-  broadcastState(acct);
-}
-
-async function engineTick(acct) {
-  if (acct.engine !== 'running' || acct.locked) return;
-  acct.locked = true;
-
-  try {
-    // Get current period
-    const period = await getCurrentPeriod(acct);
-    if (!period) { acct.locked = false; return; }
-
-    const issue   = period.issueNumber || period.issue || '';
-    const cd      = parseInt(period.remainTime || period.countdown || 0);
-    acct.countdown = cd;
-
-    // New period
-    if (issue !== acct.currentPeriod) {
-      // Check result of previous bet
-      if (acct.waitingResult && acct.resultIssue) {
-        const last = await getLastResult(acct);
-        if (last && last.issueNumber === acct.resultIssue) {
-          const num    = parseInt(last.number !== undefined ? last.number : last.openNumber);
-          const result = num >= 5 ? 'BIG' : 'SMALL';
-          const won    = result === acct.currentPred;
-          const betAmt = acct.levels[acct.currentLevel] || acct.baseAmt;
-
-          if (won) {
-            acct.wins++;
-            acct.pnl += betAmt * 0.96; // ~96% payout
-            acct.currentLevel = 0;
-            addLog(acct, 'success', `✅ WIN — Period ${acct.resultIssue.slice(-5)} | Result: ${result} | +₹${(betAmt * 0.96).toFixed(2)}`);
-
-            // Update pred history
-            const ph = acct.predHistory.find(p => p.forIssue === acct.resultIssue);
-            if (ph) { ph.result = result; ph.correct = true; }
-
-            // Stop on win check
-            if (acct.stopOnWin && acct.pnl >= acct.stopOnWinAmt) {
-              stopEngine(acct, `🏆 Stop-on-Win triggered at ₹${acct.pnl.toFixed(2)}`);
-              acct.locked = false; return;
-            }
-          } else {
-            acct.losses++;
-            acct.pnl -= betAmt;
-            addLog(acct, 'error', `❌ LOSS — Period ${acct.resultIssue.slice(-5)} | Result: ${result} | -₹${betAmt.toFixed(2)}`);
-
-            const ph = acct.predHistory.find(p => p.forIssue === acct.resultIssue);
-            if (ph) { ph.result = result; ph.correct = false; }
-
-            // Level up
-            if (acct.currentLevel < acct.levels.length - 1) {
-              acct.currentLevel++;
-              addLog(acct, 'warn', `📈 Level up → LV${acct.currentLevel + 1} | Next bet: ₹${acct.levels[acct.currentLevel]}`);
-            } else {
-              acct.maxLevelHit = true;
-              stopEngine(acct, '🚨 Max level reached — engine stopped');
-              acct.locked = false; return;
-            }
-
-            // Stop on loss check
-            if (acct.stopOnLoss && Math.abs(acct.pnl) >= acct.stopOnLossAmt) {
-              stopEngine(acct, `🛑 Stop-on-Loss triggered at -₹${Math.abs(acct.pnl).toFixed(2)}`);
-              acct.locked = false; return;
-            }
-          }
-          acct.bets++;
-          acct.waitingResult = false;
-        }
-      }
-
-      // New period setup
-      acct.currentPeriod = issue;
-      acct.betPlaced = false;
-
-      // Get history for prediction
-      const histRes = await getHistory(acct, 1, 20);
-      let histArr = [];
-      if (histRes && histRes.code === 0 && histRes.data && histRes.data.list) {
-        histArr = histRes.data.list.map(h => {
-          const n = parseInt(h.number !== undefined ? h.number : h.openNumber);
-          return n >= 5 ? 'BIG' : 'SMALL';
-        });
-      }
-
-      // Watch mode
-      if (acct.watchRemain > 0) {
-        acct.watchRemain--;
-        addLog(acct, 'info', `👁 Watching — ${acct.watchRemain} periods left`);
-        broadcastState(acct);
-        acct.locked = false;
-        return;
-      }
-
-      // Make prediction
-      const pred = predict(acct.formula, histArr);
-      acct.currentPred = pred;
-      acct.predHistory.unshift({ forIssue: issue, pred, result: null, correct: null, formula: acct.formula });
-      if (acct.predHistory.length > 100) acct.predHistory.pop();
-      addLog(acct, 'info', `🔮 Period ${issue.slice(-5)} | Pred: ${pred} | LV${acct.currentLevel + 1}`);
-    }
-
-    // Place bet (30s > cd > 5s window)
-    if (!acct.betPlaced && cd <= 30 && cd > 5) {
-      const betAmt = acct.levels[acct.currentLevel] || acct.baseAmt;
-      addLog(acct, 'info', `💰 Placing ₹${betAmt} on ${acct.currentPred}...`);
-
-      const betRes = await placeBet(acct, acct.currentPred, betAmt);
-      if (betRes && betRes.code === 0) {
-        acct.betPlaced = true;
-        acct.waitingResult = true;
-        acct.resultIssue = acct.currentPeriod;
-        addLog(acct, 'success', `✅ Bet placed: ₹${betAmt} on ${acct.currentPred} | Period ${acct.currentPeriod.slice(-5)}`);
-      } else {
-        addLog(acct, 'error', `❌ Bet failed: ${betRes?.msg || 'unknown error'}`);
-      }
-    }
-
-    // Refresh balance every 5 ticks
-    if (Date.now() % 10000 < 2000) {
-      await getBalance(acct);
-    }
-
-    broadcastState(acct);
-  } catch(e) {
-    addLog(acct, 'error', 'Engine error: ' + e.message);
-  }
-
-  acct.locked = false;
-}
-
-// ─────────────────────────────────────────────────────────
-// SOCKET.IO EVENTS
-// ─────────────────────────────────────────────────────────
-io.on('connection', (socket) => {
-  console.log('[+] Client connected:', socket.id);
-  let viewPhone = null;
-
-  // Send account list on connect
-  const list = Object.values(accounts).map(a => ({
-    phone: a.phone, engine: a.engine, balance: a.balance, pnl: a.pnl, loggedIn: !!a.lotteryToken,
-  }));
-  socket.emit('accountList', list);
-
-  // ── AUTH ──
-  socket.on('auth', async (d) => {
-    const acct = getAccount(d.phone);
-    acct.lotteryToken = d.lotteryToken || acct.lotteryToken;
-    acct.webapiToken  = d.webapiToken  || acct.webapiToken;
-    acct.pwd          = d.pwd          || acct.pwd;
-    addLog(acct, 'info', `🔑 Account authenticated: ...${d.phone.slice(-4)}`);
-    await getBalance(acct);
-    broadcastState(acct);
-    if (!viewPhone) {
-      viewPhone = d.phone;
-      socket.emit('state', getState(acct));
-    }
-  });
-
-  // ── SWITCH VIEW ──
-  socket.on('switchView', (d) => {
-    viewPhone = d.phone;
-    const acct = accounts[d.phone];
-    if (acct) socket.emit('state', getState(acct));
-  });
-
-  // ── START ENGINE ──
-  socket.on('start', (d) => {
-    const acct = accounts[d.phone];
-    if (!acct || !acct.lotteryToken) { socket.emit('toast', { type: 'error', title: 'Not logged in', msg: 'Auth first' }); return; }
-    if (acct.engine === 'running') return;
-
-    // Apply config
-    if (d.baseAmt)      acct.baseAmt      = parseFloat(d.baseAmt);
-    if (d.maxLevel)     acct.maxLevel     = parseInt(d.maxLevel);
-    if (d.formula)      acct.formula      = d.formula;
-    if (d.stopOnWin  !== undefined)    acct.stopOnWin    = d.stopOnWin;
-    if (d.stopOnWinAmt !== undefined)  acct.stopOnWinAmt = parseFloat(d.stopOnWinAmt);
-    if (d.stopOnLoss !== undefined)    acct.stopOnLoss   = d.stopOnLoss;
-    if (d.stopOnLossAmt !== undefined) acct.stopOnLossAmt = parseFloat(d.stopOnLossAmt);
-    if (d.watchCount !== undefined)    acct.watchCount   = parseInt(d.watchCount);
-    if (d.levels)       acct.levels       = d.levels;
-
-    // Build levels array from baseAmt if not given
-    if (!d.levels) {
-      acct.levels = Array.from({ length: acct.maxLevel }, (_, i) => {
-        return parseFloat((acct.baseAmt * Math.pow(2, i)).toFixed(2));
-      });
-    }
-
-    acct.engine       = 'running';
-    acct.maxLevelHit  = false;
-    acct.watchRemain  = acct.watchCount;
-    acct.betPlaced    = false;
-    acct.waitingResult = false;
-    acct.locked       = false;
-
-    addLog(acct, 'success', `▶ Engine started | Formula: ${acct.formula} | Watch: ${acct.watchCount} | Levels: [${acct.levels.join(', ')}]`);
-
-    if (acct.interval) clearInterval(acct.interval);
-    acct.interval = setInterval(() => engineTick(acct), 2000);
-    engineTick(acct);
-    broadcastState(acct);
-  });
-
-  // ── STOP ENGINE ──
-  socket.on('stop', (d) => {
-    const acct = accounts[d.phone];
-    if (!acct) return;
-    stopEngine(acct, '⏹ Engine stopped by user');
-  });
-
-  // ── SET FORMULA ──
-  socket.on('setFormula', (d) => {
-    const acct = accounts[d.phone];
-    if (!acct) return;
-    acct.formula = d.formula;
-    addLog(acct, 'info', `📐 Formula changed to: ${d.formula}`);
-    broadcastState(acct);
-  });
-
-  // ── SET LEVELS ──
-  socket.on('setLevels', (d) => {
-    const acct = accounts[d.phone];
-    if (!acct) return;
-    acct.levels = d.custom;
-    acct.currentLevel = 0;
-    addLog(acct, 'info', `📊 Levels updated: [${d.custom.join(', ')}]`);
-    broadcastState(acct);
-  });
-
-  // ── GET BET RECORD ──
-  socket.on('getBetRecord', async (d) => {
-    const acct = accounts[d.phone];
-    if (!acct || !acct.lotteryToken) return;
-    const result = await getBetRecord(acct, d.page || 1);
-    socket.emit('betRecord', { result, page: d.page || 1 });
-  });
-
-  // ── EXPORT HISTORY ──
-  socket.on('exportHistory', async (d) => {
-    const acct = accounts[d.phone];
-    if (!acct || !acct.lotteryToken) return;
-    const totalWant = d.totalRecords || 500;
-    const pageSize  = 100;
-    const maxPages  = Math.ceil(totalWant / pageSize);
-    let all = [];
-
-    for (let page = 1; page <= maxPages; page++) {
-      let retries = 0;
-      while (retries < 3) {
-        try {
-          socket.emit('exportHistoryProgress', { page, maxPages, total: all.length, retrying: retries > 0 ? retries : 0 });
-          const r = await getHistory(acct, page, pageSize);
-          if (r && r.code === 0 && r.data && r.data.list && r.data.list.length > 0) {
-            all = all.concat(r.data.list);
-            break;
-          } else {
-            socket.emit('exportHistoryProgress', { page, maxPages, total: all.length, done: true });
-            page = maxPages + 1; break;
-          }
-        } catch(e) {
-          retries++;
-          if (retries >= 3) socket.emit('exportHistoryProgress', { page, maxPages, total: all.length, error: e.message });
-          await new Promise(r => setTimeout(r, 1500));
-        }
-      }
-      if (all.length >= totalWant) break;
-      await new Promise(r => setTimeout(r, 400));
-    }
-
-    socket.emit('exportHistoryResult', { ok: true, list: all.slice(0, totalWant) });
-  });
-
-  // ── NEXUS WARMUP ──
-  socket.on('nexusWarmup', async (d) => {
-    const acct = accounts[d.phone];
-    if (!acct || !acct.lotteryToken) return;
-    const pageSize = 100, maxPages = 5;
-    let all = [];
-    for (let page = 1; page <= maxPages; page++) {
-      socket.emit('nexusWarmupProgress', { page, maxPages, total: all.length, status: `Fetching page ${page}/${maxPages}...` });
-      const r = await getHistory(acct, page, pageSize);
-      if (r && r.code === 0 && r.data && r.data.list) {
-        all = all.concat(r.data.list);
-      } else break;
-      await new Promise(r => setTimeout(r, 500));
-    }
-    const histArr = all.map(h => {
-      const n = parseInt(h.number !== undefined ? h.number : h.openNumber);
-      return n >= 5 ? 'BIG' : 'SMALL';
-    });
-    socket.emit('nexusWarmupDone', { ok: true, records: histArr.length, msg: `${histArr.length} records loaded` });
-    // Auto-start
-    acct.engine = 'running';
-    acct.watchRemain = 0;
-    addLog(acct, 'success', `⚡ Nexus warmup complete — ${histArr.length} records — engine starting`);
-    if (acct.interval) clearInterval(acct.interval);
-    acct.interval = setInterval(() => engineTick(acct), 2000);
-    broadcastState(acct);
-  });
-
-  // ── LOGOUT ──
-  socket.on('logout', (d) => {
-    const acct = accounts[d.phone];
-    if (!acct) return;
-    stopEngine(acct, '🔓 Logged out');
-    delete accounts[d.phone];
-    const list = Object.values(accounts).map(a => ({
-      phone: a.phone, engine: a.engine, balance: a.balance, pnl: a.pnl, loggedIn: !!a.lotteryToken,
-    }));
-    io.emit('accountList', list);
-    io.emit('accountRemoved', { phone: d.phone });
-  });
-
-  // ── RESET STATS ──
-  socket.on('resetStats', (d) => {
-    const acct = accounts[d.phone];
-    if (!acct) return;
-    acct.pnl = 0; acct.bets = 0; acct.wins = 0; acct.losses = 0;
-    acct.currentLevel = 0; acct.maxLevelHit = false;
-    acct.predHistory = []; acct.betHistory = [];
-    addLog(acct, 'info', '🔄 Stats reset');
-    broadcastState(acct);
-  });
-
-  socket.on('disconnect', () => {
-    console.log('[-] Client disconnected:', socket.id);
-  });
-});
-
-// ─────────────────────────────────────────────────────────
-// START SERVER
-// ─────────────────────────────────────────────────────────
-const PORT = process.env.PORT || 3000;
+// ══════════════════════════════════════════════════
+//  START
+// ══════════════════════════════════════════════════
 server.listen(PORT, () => {
-  console.log(`✅ KINGPIN Server running on port ${PORT}`);
+  console.log('[KINGPIN 3.0] Server running on port ' + PORT);
 });
