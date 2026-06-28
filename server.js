@@ -630,6 +630,6 @@ function broadcastAccountList() {
 // ══════════════════════════════════════════════════
 //  START
 // ══════════════════════════════════════════════════
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log('[KINGPIN 3.0] Server running on port ' + PORT);
 });
