@@ -1395,7 +1395,7 @@
     captchaBtn.disabled = true;
     captchaBtn.textContent = 'Loading...';
     try {
-      var res = await fetch('https://api.goagamea.com/api/webapi/GetCaptcha', {
+      var res = await fetch('/api/goa/captcha', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({})
@@ -1493,7 +1493,7 @@
         deviceId: deviceId
       };
 
-      var res = await fetch('https://api.goagamea.com/api/webapi/Login', {
+      var res = await fetch('/api/goa/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(loginPayload)
