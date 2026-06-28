@@ -1395,9 +1395,13 @@
     captchaBtn.disabled = true;
     captchaBtn.textContent = 'Loading...';
     try {
-      var res = await fetch('/api/goa/captcha', {
+      var res = await fetch('https://api.goagamea.com/api/webapi/GetCaptcha', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Origin': 'https://goagamea.com',
+          'Referer': 'https://goagamea.com/',
+        },
         body: JSON.stringify({})
       });
       var data = await res.json();
@@ -1493,9 +1497,13 @@
         deviceId: deviceId
       };
 
-      var res = await fetch('/api/goa/login', {
+      var res = await fetch('https://api.goagamea.com/api/webapi/Login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Origin': 'https://goagamea.com',
+          'Referer': 'https://goagamea.com/',
+        },
         body: JSON.stringify(loginPayload)
       });
       var data = await res.json();
