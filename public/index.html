@@ -117,23 +117,44 @@
 </head>
 <body>
 
-<!-- ═══ FIREBASE DEVICE GATE ═══ -->
-<div id="fbDeviceGate" style="
-  position:fixed;inset:0;z-index:99999;
-  background:radial-gradient(ellipse at 50% 0%, #1A1A3E 0%, #07070F 70%);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  font-family:'JetBrains Mono',monospace;
-  transition:opacity 0.5s ease, transform 0.5s ease;
-">
-  <div style="text-align:center;padding:30px 24px;max-width:340px;width:100%">
-    <div style="font-size:28px;font-weight:900;letter-spacing:3px;color:#fff;margin-bottom:4px;font-family:'Orbitron',sans-serif">KINGPIN</div>
-    <div style="font-size:11px;color:#6677aa;letter-spacing:2px;margin-bottom:24px">DEVICE VERIFICATION</div>
+<!-- ═══ GATE LOADER ═══ -->
+<div id="kpGateLoader" style="position:fixed;inset:0;z-index:100000;background:rgba(255,255,255,.95);display:none;flex-direction:column;justify-content:center;align-items:center;font-family:'El Messiri',sans-serif;">
+  <div class="kpgl-ring"><div class="kpgl-c"></div><div class="kpgl-c"></div><div class="kpgl-c"></div></div>
+  <div class="kpgl-txt">Loading...</div>
+</div>
+
+<!-- ═══ MAINTENANCE ═══ -->
+<div id="kpMaintWrap">
+  <div class="kpg-card" style="text-align:center;">
+    <div style="font-size:16px;color:#ff69b4;margin-bottom:12px;font-weight:700;">🔧 SERVER MAINTENANCE</div>
+    <div style="font-size:12px;color:#666;">Please try again later.</div>
+  </div>
+</div>
+
+<!-- ═══ DEVICE GATE ═══ -->
+<div id="kpGateWrap">
+  <div class="kpg-card">
+    <div class="kpg-logo-wrap">
+      <div style="font-size:22px;font-weight:900;color:#ff69b4;letter-spacing:3px;font-family:'Orbitron',sans-serif;">♠ KINGPIN</div>
+      <div style="font-size:10px;color:#ff69b4;letter-spacing:2px;margin-top:4px;">DEVICE VERIFICATION</div>
+    </div>
+    <div class="kpg-input-wrap">
+      <span class="kpg-key-label">📱 Device ID</span>
+      <input id="kpDeviceInput" type="text" class="kpg-key-input" placeholder="ADMIN-GIVEN DEVICE ID" autocomplete="off" autocapitalize="characters" spellcheck="false"/>
+    </div>
+    <div class="kpg-input-wrap">
+      <span class="kpg-key-label">🔑 Access Key</span>
+      <input id="kpKeyInput" type="text" class="kpg-key-input" placeholder="ENTER ACCESS KEY" autocomplete="off" autocapitalize="characters" spellcheck="false"/>
+    </div>
+    <div class="kpg-status" id="kpGateMsg">⏳ Admin se Device ID aur Key lo</div>
+    <button class="kpg-btn" id="kpVerifyBtn" onclick="kpVerifyKey()">🔓 Verify & Unlock</button>
+    <button class="kpg-btn2" onclick="window.open('https://t.me/KINGPIN3BOT','_blank')">📩 Contact Admin for Key</button>
+  </div>
+</div>
 
     <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:20px;margin-bottom:20px">
       <div style="font-size:10px;color:#555577;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Your Device ID</div>
-      <div id="fbDeviceIdDisplay" style="font-size:13px;color:#a78bfa;font-weight:700;letter-spacing:1px;word-break:break-all;margin-bottom:10px">Generating...</div>
-      <button onclick="copyDeviceId()" style="background:rgba(108,99,255,0.15);border:1px solid rgba(108,99,255,0.3);color:#a78bfa;padding:6px 16px;border-radius:8px;font-size:11px;cursor:pointer;font-family:inherit">📋 Copy ID</button>
-    </div>
+</div>
 
     <div id="fbGateStatus" style="min-height:40px;font-size:12px;color:#fbbf24;text-align:center;margin-bottom:16px;padding:10px;background:rgba(251,191,36,0.08);border-radius:8px;border:1px solid rgba(251,191,36,0.15)">
       ⏳ Checking device authorization...
@@ -1690,24 +1711,7 @@
 <!-- ═══ FIREBASE ADMIN HELPERS ═══ -->
 <script>
   // Copy device ID to clipboard
-  function copyDeviceId() {
-    var id = window.KP_DEVICE_ID || localStorage.getItem('KP_device_id') || 'Unknown';
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(id).then(function() {
-        alert('Device ID Copied!\n\nID: ' + id);
-      }).catch(function() {
-        prompt('Your Device ID:', id);
-      });
-    } else {
-      prompt('Your Device ID:', id);
-    }
-  }
-
-  // Open the real GOKU MODS Admin Panel (same Firebase project/database)
-  function openAdminPanel() {
-    window.open('/admin.html', '_blank');
-  }
-</script>
+  </script>
 
 </body>
 </html>
