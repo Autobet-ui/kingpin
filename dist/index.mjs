@@ -54811,14 +54811,9 @@ function startPolling(io3, acct) {
 }
 
 // src/index.ts
-var rawPort = process.env["PORT"];
-if (!rawPort) {
-  throw new Error("PORT environment variable is required but was not provided.");
-}
+var rawPort = process.env["PORT"] || "3000";
 var port = Number(rawPort);
-if (Number.isNaN(port) || port <= 0) {
-  throw new Error(`Invalid PORT value: "${rawPort}"`);
-}
+if (Number.isNaN(port) || port <= 0) { port = 3000; }
 var httpServer = http.createServer(app_default);
 var io2 = new Server(httpServer, {
   cors: { origin: "*" },
