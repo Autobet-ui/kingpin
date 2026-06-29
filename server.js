@@ -5,18 +5,11 @@ const http      = require('http');
 const { Server } = require('socket.io');
 const axios     = require('axios');
 const path      = require('path');
-const https     = require('https');
-const dns       = require('dns');
-
-// Force Google DNS for resolving GOA API domains
-dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
 
 // ══════════════════════════════════════════════════
 //  CONFIG
 // ══════════════════════════════════════════════════
 const PORT       = process.env.PORT || 3000;
-// Use IP if DNS fails on Railway
-const GOA_IP     = process.env.GOA_API_IP || '104.21.79.243';
 const GOA_BASE   = 'https://api.goagamea.com';   // Goa Games API base
 const GAME_CODE  = 'WinGo_30S';
 
@@ -27,13 +20,8 @@ const GOA_HEADERS = {
   'Origin'         : 'https://goagamea.com',
   'Referer'        : 'https://goagamea.com/',
   'User-Agent'     : 'Mozilla/5.0 (Linux; Android 11; SM-G991B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
-  'x-forwarded-for': '103.21.' + Math.floor(Math.random()*255) + '.' + Math.floor(Math.random()*255),
-  'CF-IPCountry'   : 'IN',
-  'X-Country-Code' : 'IN',
+  'x-forwarded-for': '103.100.' + Math.floor(Math.random()*255) + '.' + Math.floor(Math.random()*255),
 };
-
-// goaRequest with retry on multiple domains
-const GOA_DOMAINS = ['https://api.goagamea.com', 'https://www.goagamea.com'];
 
 // ══════════════════════════════════════════════════
 //  ACCOUNT STORE  (phone → session)
@@ -179,33 +167,14 @@ function makeState(phone) {
 // ══════════════════════════════════════════════════
 async function goaRequest(endpoint, payload, token) {
   var headers = { ...GOA_HEADERS };
-  headers['x-forwarded-for'] = '103.' + Math.floor(Math.random()*50+1) + '.' + Math.floor(Math.random()*255) + '.' + Math.floor(Math.random()*255);
   if (token) headers['Authorization'] = 'Bearer ' + token;
-
-  // Try 1: Normal domain
-  // Try 2: IP with Host header (bypasses DNS issue on Railway)
-  const attempts = [
-    { url: GOA_BASE + endpoint, headers: { ...headers } },
-    { url: 'https://' + GOA_IP + endpoint, headers: { ...headers, 'Host': 'api.goagamea.com' } },
-    { url: 'https://' + GOA_IP + endpoint, headers: { ...headers, 'Host': 'goagamea.com' } },
-  ];
-
-  var lastErr = null;
-  for (var attempt of attempts) {
-    try {
-      var r = await axios.post(attempt.url, payload || {}, {
-        headers: attempt.headers,
-        timeout: 15000,
-        httpsAgent: new (require('https').Agent)({ rejectUnauthorized: false })
-      });
-      console.log('[KP] Success via:', attempt.url.substring(0, 40));
-      return r.data;
-    } catch(e) {
-      lastErr = e.response ? JSON.stringify(e.response.data) : e.message;
-      console.log('[KP] Failed:', attempt.url.substring(0, 40), '-', lastErr.substring(0, 80));
-    }
+  try {
+    var r = await axios.post(GOA_BASE + endpoint, payload, { headers, timeout: 12000 });
+    return r.data;
+  } catch(e) {
+    var msg = e.response ? JSON.stringify(e.response.data) : e.message;
+    throw new Error('GoaAPI ' + endpoint + ': ' + msg);
   }
-  throw new Error('GoaAPI ' + endpoint + ': ' + lastErr);
 }
 
 // GET captcha
@@ -277,40 +246,26 @@ const server = http.createServer(app);
 const io     = new Server(server, { cors: { origin: '*' } });
 
 app.use(express.json());
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Content-Type');
-  next();
-});
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── REST PROXY ROUTES ──
 app.post('/api/goa/captcha', async (req, res) => {
   try {
-    console.log('[KP] Captcha request received');
     var data = await getCaptcha();
-    console.log('[KP] Captcha response code:', data && data.code);
     res.json(data);
   } catch(e) {
-    console.error('[KP] Captcha error:', e.message);
     res.json({ code: -1, msg: e.message });
   }
 });
 
 app.post('/api/goa/login', async (req, res) => {
   try {
-    console.log('[KP] Login request received for:', req.body && req.body.username);
     var data = await loginGoa(req.body);
-    console.log('[KP] Login response code:', data && data.code);
     res.json(data);
   } catch(e) {
-    console.error('[KP] Login error:', e.message);
     res.json({ code: -1, msg: e.message });
   }
 });
-
-// Health check
-app.get('/health', (req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 
 // ── SOCKET.IO ──
 io.on('connection', (socket) => {
@@ -664,6 +619,6 @@ function broadcastAccountList() {
 // ══════════════════════════════════════════════════
 //  START
 // ══════════════════════════════════════════════════
-server.listen(PORT, '0.0.0.0', () => {
+server.listen(PORT, () => {
   console.log('[KINGPIN 3.0] Server running on port ' + PORT);
 });
