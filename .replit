@@ -1,0 +1,14 @@
+run = "npm install && node server.js"
+language = "nodejs"
+entrypoint = "server.js"
+
+[nix]
+channel = "stable-23_11"
+
+[deployment]
+run = ["sh", "-c", "npm install && node server.js"]
+deploymentTarget = "cloudrun"
+
+[[ports]]
+localPort = 3000
+externalPort = 80
