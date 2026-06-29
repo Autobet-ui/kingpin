@@ -1,12 +1,11 @@
-run = "npm install && node server.js"
+run = "npm start"
 language = "nodejs"
-entrypoint = "server.js"
 
 [nix]
 channel = "stable-23_11"
 
 [deployment]
-run = ["sh", "-c", "npm install && node server.js"]
+run = ["sh", "-c", "npm start"]
 deploymentTarget = "cloudrun"
 
 [[ports]]
