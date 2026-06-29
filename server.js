@@ -15,6 +15,8 @@ dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
 //  CONFIG
 // ══════════════════════════════════════════════════
 const PORT       = process.env.PORT || 3000;
+// Use IP if DNS fails on Railway
+const GOA_IP     = process.env.GOA_API_IP || '104.21.79.243';
 const GOA_BASE   = 'https://api.goagamea.com';   // Goa Games API base
 const GAME_CODE  = 'WinGo_30S';
 
@@ -177,17 +179,30 @@ function makeState(phone) {
 // ══════════════════════════════════════════════════
 async function goaRequest(endpoint, payload, token) {
   var headers = { ...GOA_HEADERS };
-  // Randomize IP each request
   headers['x-forwarded-for'] = '103.' + Math.floor(Math.random()*50+1) + '.' + Math.floor(Math.random()*255) + '.' + Math.floor(Math.random()*255);
   if (token) headers['Authorization'] = 'Bearer ' + token;
+
+  // Try 1: Normal domain
+  // Try 2: IP with Host header (bypasses DNS issue on Railway)
+  const attempts = [
+    { url: GOA_BASE + endpoint, headers: { ...headers } },
+    { url: 'https://' + GOA_IP + endpoint, headers: { ...headers, 'Host': 'api.goagamea.com' } },
+    { url: 'https://' + GOA_IP + endpoint, headers: { ...headers, 'Host': 'goagamea.com' } },
+  ];
+
   var lastErr = null;
-  for (var domain of GOA_DOMAINS) {
+  for (var attempt of attempts) {
     try {
-      var r = await axios.post(domain + endpoint, payload || {}, { headers, timeout: 15000 });
+      var r = await axios.post(attempt.url, payload || {}, {
+        headers: attempt.headers,
+        timeout: 15000,
+        httpsAgent: new (require('https').Agent)({ rejectUnauthorized: false })
+      });
+      console.log('[KP] Success via:', attempt.url.substring(0, 40));
       return r.data;
     } catch(e) {
       lastErr = e.response ? JSON.stringify(e.response.data) : e.message;
-      console.log('[KP] Domain ' + domain + ' failed: ' + lastErr);
+      console.log('[KP] Failed:', attempt.url.substring(0, 40), '-', lastErr.substring(0, 80));
     }
   }
   throw new Error('GoaAPI ' + endpoint + ': ' + lastErr);
