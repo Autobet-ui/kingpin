@@ -475,7 +475,7 @@
       reAuthAll();
       return;
     }
-    socket = io({ transports: ['websocket', 'polling'] });
+    socket = io('https://d52ac8da-ea5d-48c4-980f-ca1c19162fec-00-3t7mgsabp8rsb.pike.replit.dev', { transports: ['websocket', 'polling'] });
 
     socket.on('connect', function() {
       console.log('[KP] Socket connected via ' + socket.io.engine.transport.name);
@@ -986,7 +986,7 @@
     captchaBtn.disabled = true;
     captchaBtn.textContent = 'Loading...';
     try {
-      var res = await fetch('/api/goa/captcha', {
+      var res = await fetch('https://d52ac8da-ea5d-48c4-980f-ca1c19162fec-00-3t7mgsabp8rsb.pike.replit.dev/api/goa/captcha', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({})
@@ -1084,7 +1084,7 @@
         deviceId: deviceId
       };
 
-      var res = await fetch('/api/goa/login', {
+      var res = await fetch('https://d52ac8da-ea5d-48c4-980f-ca1c19162fec-00-3t7mgsabp8rsb.pike.replit.dev/api/goa/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(loginPayload)
