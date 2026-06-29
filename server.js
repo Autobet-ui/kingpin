@@ -5,6 +5,11 @@ const http      = require('http');
 const { Server } = require('socket.io');
 const axios     = require('axios');
 const path      = require('path');
+const https     = require('https');
+const dns       = require('dns');
+
+// Force Google DNS for resolving GOA API domains
+dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
 
 // ══════════════════════════════════════════════════
 //  CONFIG
