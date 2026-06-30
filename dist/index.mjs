@@ -54346,11 +54346,39 @@ async function fetchCurrentPeriod(acct) {
     const r = await goaPost2("/WinGo/GetCurrentIssue", { typeId: TYPE_ID }, acct.webapiToken || acct.lotteryToken);
     if (r["code"] === 0) {
       const d = r["data"];
-      return {
-        period: String(d?.["issueNumber"] ?? d?.["issue"] ?? ""),
-        countdown: Number(d?.["countdown"] ?? d?.["remainTime"] ?? d?.["endTime"] ?? 0),
-        total: Number(d?.["totalTime"] ?? d?.["duration"] ?? 30)
-      };
+      const period = String(d?.["issueNumber"] ?? d?.["issue"] ?? "");
+      if (period) {
+        return {
+          period,
+          countdown: Number(d?.["countdown"] ?? d?.["remainTime"] ?? d?.["endTime"] ?? 0),
+          total: Number(d?.["totalTime"] ?? d?.["duration"] ?? 30)
+        };
+      }
+    }
+  } catch (_) {
+  }
+  // Fallback: public history API (no login needed) — derive current period + countdown
+  try {
+    const url = `${PUBLIC_HISTORY_URL}?pageNo=1&pageSize=1&gameId=1`;
+    const res = await fetch(url, {
+      headers: { "Accept": "application/json, */*", "User-Agent": GOA_UA_HEADERS["User-Agent"] },
+      signal: AbortSignal.timeout(8e3)
+    });
+    if (res.ok) {
+      const json = await res.json();
+      const data = json["data"] ?? json;
+      const list = data?.["list"] ?? data?.["issueList"] ?? data?.["data"] ?? json?.["list"] ?? [];
+      if (Array.isArray(list) && list.length > 0) {
+        const lastIssue = String(list[0]["issueNumber"] ?? list[0]["issue"] ?? "");
+        if (lastIssue) {
+          const lastNum = BigInt(lastIssue);
+          const nextPeriod = String(lastNum + 1n);
+          const nowSec = Math.floor(Date.now() / 1e3);
+          const secsIntoMinuteCycle = nowSec % 30;
+          const countdown = 30 - secsIntoMinuteCycle;
+          return { period: nextPeriod, countdown, total: 30 };
+        }
+      }
     }
   } catch (_) {
   }
