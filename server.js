@@ -435,6 +435,33 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('exportHistory', async (d) => {
+    var phone = d && d.phone;
+    var totalWant = (d && d.totalRecords) || 500;
+    if (!phone || !accounts[phone]) { socket.emit('exportHistoryResult', { ok: false, list: [] }); return; }
+    var st = accounts[phone];
+    var pageSize = 100;
+    var maxPages = Math.ceil(totalWant / pageSize);
+    var all = [];
+    for (var page = 1; page <= maxPages; page++) {
+      try {
+        socket.emit('exportHistoryProgress', { page, maxPages, total: all.length });
+        var r = await getHistory(st.webapiToken, pageSize);
+        if (r && r.code === 0 && r.data && r.data.list && r.data.list.length > 0) {
+          all = all.concat(r.data.list);
+        } else {
+          socket.emit('exportHistoryProgress', { page, maxPages, total: all.length, done: true });
+          break;
+        }
+      } catch(e) {
+        socket.emit('exportHistoryProgress', { page, maxPages, total: all.length, error: e.message });
+      }
+      if (all.length >= totalWant) break;
+      await new Promise(r => setTimeout(r, 300));
+    }
+    socket.emit('exportHistoryResult', { ok: true, list: all.slice(0, totalWant) });
+  });
+
   socket.on('disconnect', () => {
     console.log('[KP] Client disconnected:', socket.id);
   });
