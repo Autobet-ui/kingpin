@@ -54433,80 +54433,19 @@ async function checkBetResult(acct, period) {
   }
   return null;
 }
-var MIN_CONF = 63;
-var MIN_CONF_LOSS = 72;
-function shadowEngine(seq, consecLosses) {
-  if (seq.length < 6) return { pred: "B", conf: 50, reason: "Collecting data...", skip: true };
-  let streak = 1;
-  for (let i = 1; i < seq.length; i++) {
-    if (seq[i] === seq[0]) streak++;
-    else break;
-  }
-  const opp = seq[0] === "B" ? "S" : "B";
-  if (streak >= 5) return { pred: opp, conf: 92, reason: `L2-FIX: ${streak}x${seq[0]} \u2192 near-certain reversal`, skip: false };
-  if (streak >= 4) return { pred: opp, conf: 85, reason: `L1-FIX: ${streak}x${seq[0]} \u2192 high-prob reversal`, skip: false };
-  const votes = { BIG: 0, SMALL: 0 };
-  const reasons = [];
-  const vote = (side, pts, label) => {
-    votes[side] += pts;
-    reasons.push(`${label}+${pts}\u2192${side}`);
-  };
-  const oppSide = seq[0] === "B" ? "SMALL" : "BIG";
-  const sameSide = seq[0] === "B" ? "BIG" : "SMALL";
-  if (streak >= 3) {
-    vote(oppSide, Math.min(streak * 11, 44), `AntiStreak(${streak}x${seq[0]})`);
-  } else if (streak === 1) {
-    vote(sameSide, 6, "ShortContinue");
-  }
-  const h5 = seq.slice(0, Math.min(5, seq.length));
-  if (h5.length >= 5 && h5.every((v, i) => i === 0 || v !== h5[i - 1])) {
-    vote(oppSide, 28, "Zigzag-5");
-  }
-  const L10 = seq.slice(0, Math.min(10, seq.length));
-  const bc10 = L10.filter((x) => x === "B").length;
-  const sc10 = L10.length - bc10;
-  if (bc10 >= 7) vote("SMALL", 22, `FreqBias(B${bc10}/10)`);
-  else if (sc10 >= 7) vote("BIG", 22, `FreqBias(S${sc10}/10)`);
-  else vote(bc10 >= sc10 ? "BIG" : "SMALL", 4, "MildDom");
-  if (seq.length >= 4 && seq[0] === seq[1] && seq[2] === seq[3] && seq[0] !== seq[2]) {
-    vote(oppSide, 18, `DblPair(${seq[1]}\u2192switch)`);
-  }
-  if (seq.length >= 3 && seq[0] === seq[2] && seq[0] !== seq[1]) {
-    const yside = seq[1] === "B" ? "BIG" : "SMALL";
-    vote(yside, 14, `Mirror(XYX\u2192${seq[1]})`);
-  }
-  const m5b = h5.filter((x) => x === "B").length;
-  const m5s = h5.length - m5b;
-  if (m5b >= 4) vote("SMALL", 14, `Mom5(B${m5b})`);
-  else if (m5s >= 4) vote("BIG", 14, `Mom5(S${m5s})`);
-  if (seq.length >= 3 && seq[0] === seq[1] && seq[1] === seq[2]) {
-    vote(oppSide, 20, `Triple(${seq[0]}\u2192rev)`);
-  }
-  if (seq.length >= 30) {
-    const L30 = seq.slice(0, 30);
-    const b30 = L30.filter((x) => x === "B").length;
-    const s30 = L30.length - b30;
-    if (b30 >= 19) vote("SMALL", 10, `Trend30(B${b30})`);
-    else if (s30 >= 19) vote("BIG", 10, `Trend30(S${s30})`);
-  }
-  const total = votes.BIG + votes.SMALL;
-  if (total === 0) return { pred: "B", conf: 50, reason: "No signal", skip: true };
-  const pickFull = votes.BIG > votes.SMALL ? "BIG" : "SMALL";
-  const pick = pickFull === "BIG" ? "B" : "S";
-  const rawConf = votes[pickFull] / total * 100;
-  const margin = Math.abs(votes.BIG - votes.SMALL);
-  let conf = Math.min(95, Math.max(50, rawConf));
-  conf = Math.min(95, conf + Math.min(margin * 0.3, 8));
-  conf = Math.round(conf * 10) / 10;
-  const thr = consecLosses >= 2 ? MIN_CONF_LOSS : MIN_CONF;
-  const skip = conf < thr;
-  const topReasons = reasons.slice(0, 3).join(" | ");
-  return { pred: pick, conf, reason: `Shadow[${conf}%] BIG=${votes.BIG} SMALL=${votes.SMALL} | ${topReasons}`, skip };
-}
+var GRR_LOOP = ["GREEN", "RED", "RED"];
+var grrLoopIndex = 0;
+function colorToBS(color) { return color === "GREEN" ? "B" : "S"; }
 function predict(_formula, history, consecLosses = 0) {
-  if (history.length === 0) return { pred: "B", conf: 50, reason: "No history \u2014 default BIG" };
-  const result = shadowEngine(history, consecLosses);
-  return { pred: result.pred, conf: result.conf, reason: result.reason, skip: result.skip };
+  const pos = grrLoopIndex % 3;
+  let finalColor = GRR_LOOP[pos];
+  const isOpposite = consecLosses >= 7;
+  if (isOpposite) finalColor = finalColor === "GREEN" ? "RED" : "GREEN";
+  const pred = colorToBS(finalColor);
+  const loopStr = GRR_LOOP.map((l, i) => i === pos ? `[${l}]` : l).join(" \u2192 ");
+  const reason = `GRR Loop Step ${pos + 1}/3: ${loopStr}${isOpposite ? ` \u2192 OPPOSITE(LV8): ${finalColor}` : ""}`;
+  grrLoopIndex++;
+  return { pred, conf: isOpposite ? 60 : 70, reason, skip: false };
 }
 function setupSocketHandlers(io3) {
   io3.on("connection", (socket) => {
