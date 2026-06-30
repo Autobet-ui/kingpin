@@ -54342,22 +54342,7 @@ async function fetchBalance(acct) {
   return acct.balance;
 }
 async function fetchCurrentPeriod(acct) {
-  try {
-    const r = await goaPost2("/WinGo/GetCurrentIssue", { typeId: TYPE_ID }, acct.webapiToken || acct.lotteryToken);
-    if (r["code"] === 0) {
-      const d = r["data"];
-      const period = String(d?.["issueNumber"] ?? d?.["issue"] ?? "");
-      if (period) {
-        return {
-          period,
-          countdown: Number(d?.["countdown"] ?? d?.["remainTime"] ?? d?.["endTime"] ?? 0),
-          total: Number(d?.["totalTime"] ?? d?.["duration"] ?? 30)
-        };
-      }
-    }
-  } catch (_) {
-  }
-  // Fallback: public history API (no login needed) — derive current period + countdown
+  // Primary: public history API (reliable, no-login, gives latest issue)
   try {
     const url = `${PUBLIC_HISTORY_URL}?pageNo=1&pageSize=1&gameId=1`;
     const res = await fetch(url, {
@@ -54370,14 +54355,30 @@ async function fetchCurrentPeriod(acct) {
       const list = data?.["list"] ?? data?.["issueList"] ?? data?.["data"] ?? json?.["list"] ?? [];
       if (Array.isArray(list) && list.length > 0) {
         const lastIssue = String(list[0]["issueNumber"] ?? list[0]["issue"] ?? "");
-        if (lastIssue) {
+        if (lastIssue && /^\d+$/.test(lastIssue)) {
           const lastNum = BigInt(lastIssue);
           const nextPeriod = String(lastNum + 1n);
-          const nowSec = Math.floor(Date.now() / 1e3);
-          const secsIntoMinuteCycle = nowSec % 30;
-          const countdown = 30 - secsIntoMinuteCycle;
+          const nowMs = Date.now();
+          const secsIntoCycle = Math.floor(nowMs / 1e3) % 30;
+          const countdown = 30 - secsIntoCycle;
           return { period: nextPeriod, countdown, total: 30 };
         }
+      }
+    }
+  } catch (_) {
+  }
+  // Fallback: GOA logged-in API
+  try {
+    const r = await goaPost2("/WinGo/GetCurrentIssue", { typeId: TYPE_ID }, acct.webapiToken || acct.lotteryToken);
+    if (r["code"] === 0) {
+      const d = r["data"];
+      const period = String(d?.["issueNumber"] ?? d?.["issue"] ?? "");
+      if (period) {
+        return {
+          period,
+          countdown: Number(d?.["countdown"] ?? d?.["remainTime"] ?? d?.["endTime"] ?? 0),
+          total: Number(d?.["totalTime"] ?? d?.["duration"] ?? 30)
+        };
       }
     }
   } catch (_) {
