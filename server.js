@@ -183,13 +183,54 @@ function makeState(phone) {
 }
 
 // ══════════════════════════════════════════════════
-//  GOA GAMES API CALLS
+//  GOA GAMES API CALLS  (with MD5 signature, matches verified backend)
 // ══════════════════════════════════════════════════
+const crypto = require('crypto');
+
+const GOA_API = GOA_BASE + '/api/webapi';
+const EXCLUDED_FROM_SIGN = ['signature', 'track', 'xosoBettingData'];
+
+function makeRandom() {
+  return 'xxxxxxxxxxxx4xxxyxxxxxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    var r = (Math.random() * 16) | 0;
+    var v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+function md5Hex(str) {
+  return crypto.createHash('md5').update(str).digest('hex');
+}
+
+function signPayload(data) {
+  var enriched = Object.assign({ language: 0, random: makeRandom() }, data);
+  var sorted = Object.keys(enriched).sort();
+  var filtered = {};
+  sorted.forEach(function(k) {
+    var v = enriched[k];
+    if (v !== null && v !== '' && EXCLUDED_FROM_SIGN.indexOf(k) === -1) {
+      filtered[k] = v;
+    }
+  });
+  enriched['signature'] = md5Hex(JSON.stringify(filtered)).toUpperCase().slice(0, 32);
+  enriched['timestamp'] = Math.floor(Date.now() / 1000);
+  return enriched;
+}
+
+const BYPASS_HEADERS = {
+  'User-Agent'      : 'Mozilla/5.0 (Linux; Android 12; SM-G991B Build/SP1A.210812.016) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.230 Mobile Safari/537.36',
+  'Accept'          : 'application/json, text/plain, */*',
+  'Accept-Language' : 'en-US,en;q=0.9',
+  'Origin'          : 'https://goagamea.com',
+  'Referer'         : 'https://goagamea.com/',
+};
+
 async function goaRequest(endpoint, payload, token) {
-  var headers = { ...GOA_HEADERS };
-  if (token) headers['Authorization'] = 'Bearer ' + token;
+  var body = signPayload(payload || {});
+  var headers = Object.assign({}, BYPASS_HEADERS, { 'Content-Type': 'application/json' });
+  if (token) { headers['Authorization'] = 'Bearer ' + token; headers['token'] = token; }
   try {
-    var r = await axios.post(GOA_BASE + endpoint, payload, { headers, timeout: 12000 });
+    var r = await axios.post(GOA_API + endpoint, body, { headers, timeout: 12000 });
     return r.data;
   } catch(e) {
     var msg = e.response ? JSON.stringify(e.response.data) : e.message;
@@ -199,60 +240,65 @@ async function goaRequest(endpoint, payload, token) {
 
 // GET captcha
 async function getCaptcha() {
-  return await goaRequest('/api/webapi/GetCaptcha', {});
+  return await goaRequest('/Captcha', {});
 }
 
 // POST login
 async function loginGoa(payload) {
-  return await goaRequest('/api/webapi/Login', payload);
+  return await goaRequest('/Login', payload);
 }
 
 // GET balance
 async function getBalance(token) {
-  var r = await goaRequest('/api/webapi/GetUserInfo', {}, token);
+  var r = await goaRequest('/User/GetUserInfo', {}, token);
   if (r && r.code === 0 && r.data) return parseFloat(r.data.money || r.data.balance || 0);
   return 0;
 }
 
 // GET current issue / countdown
 async function getCurrentIssue(token) {
-  var r = await goaRequest('/api/webapi/GetGameIssue', { gameCode: GAME_CODE }, token);
-  if (r && r.code === 0 && r.data) return r.data;
+  var r = await goaRequest('/WinGo/GetIssueList', { pageNo: 1, pageSize: 1, typeId: 30 }, token);
+  if (r && r.code === 0 && r.data && r.data.list && r.data.list[0]) {
+    var item = r.data.list[0];
+    var lastIssue = String(item.issueNumber || item.issue || '');
+    if (lastIssue && /^\d+$/.test(lastIssue)) {
+      var nextPeriod = String(BigInt(lastIssue) + 1n);
+      var secsIntoCycle = Math.floor(Date.now() / 1000) % 30;
+      return { issueNumber: nextPeriod, countdown: 30 - secsIntoCycle, totalTime: 30 };
+    }
+  }
   return null;
 }
 
 // GET last result
 async function getLastResult(token) {
-  var r = await goaRequest('/api/webapi/GetGameResult', { gameCode: GAME_CODE, pageNo: 1, pageSize: 1 }, token);
+  var r = await goaRequest('/WinGo/GetIssueList', { pageNo: 1, pageSize: 1, typeId: 30 }, token);
   if (r && r.code === 0 && r.data && r.data.list && r.data.list[0]) return r.data.list[0];
   return null;
 }
 
 // GET history for prediction
 async function getHistory(token, size) {
-  var r = await goaRequest('/api/webapi/GetGameResult', { gameCode: GAME_CODE, pageNo: 1, pageSize: size || 20 }, token);
+  var r = await goaRequest('/WinGo/GetIssueList', { pageNo: 1, pageSize: size || 20, typeId: 30 }, token);
   if (r && r.code === 0 && r.data && r.data.list) return r.data.list;
   return [];
 }
 
 // PLACE BET
 async function placeBet(token, issueNumber, predBS, amount) {
-  // Goa Games bet content format: WinGo_30S_Big or WinGo_30S_Small
-  var betContent = GAME_CODE + (predBS === 'BIG' ? '_Big' : '_Small');
-  var r = await goaRequest('/api/webapi/PlaceBet', {
-    gameCode    : GAME_CODE,
+  var typeId = predBS === 'BIG' ? 2 : 1;
+  var r = await goaRequest('/WinGo/WinGoBet', {
     issueNumber : issueNumber,
-    betContent  : betContent,
+    typeId      : typeId,
     betAmount   : amount,
-    multiple    : 1,
+    gameType    : 1,
   }, token);
   return r;
 }
 
 // GET bet record
 async function getBetRecord(token, page) {
-  return await goaRequest('/api/webapi/GetBetRecord', {
-    gameCode: GAME_CODE,
+  return await goaRequest('/WinGo/GetMyGameRecordList', {
     pageNo  : page || 1,
     pageSize: 20,
   }, token);
