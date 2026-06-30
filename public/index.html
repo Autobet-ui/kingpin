@@ -331,9 +331,9 @@
           <div class="kp-config-preview" id="abConfigPreview">—</div>
           <div class="kp-divider"></div>
           <div class="kp-formula-label">🧠 PREDICTION ENGINE</div>
-          <div class="kp-formula-active" id="abFormulaActive" style="cursor:default">
+          <div class="kp-formula-active" id="abFormulaActive" style="cursor:pointer">
             <span id="abFormulaName">⚡ Shadow Adaptive v14.0</span>
-            <span style="font-size:10px;color:#4ade80;letter-spacing:.06em">ACTIVE ●</span>
+            <span id="abBtnFormulaPopup" style="font-size:10px;color:#4ade80;letter-spacing:.06em;cursor:pointer">Change ▸</span>
           </div>
           <div style="margin-top:6px;padding:8px 10px;background:rgba(74,222,128,0.04);border:1px solid rgba(74,222,128,0.15);border-radius:8px;font-size:9px;color:#555577;line-height:1.5">
             8-Strategy Voting · Anti-Streak · Zigzag · FreqBias · DblPair · Mirror · Momentum · Triple · Trend30<br/>
@@ -460,6 +460,17 @@
 
 <!-- Formula popup removed — Shadow Adaptive Engine v14.0 is the single fixed engine -->
 
+<!-- ═══ Formula Selection Popup ═══ -->
+<div id="abFormulaPopup" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);align-items:center;justify-content:center;padding:16px">
+  <div style="background:#0d0d1a;border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:18px;max-width:420px;width:100%;max-height:80vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;font-weight:700;color:#e0e0ff;font-size:14px">
+      🧠 SELECT FORMULA
+      <button id="abBtnFormulaClose" style="background:none;border:none;color:#888;font-size:22px;cursor:pointer;line-height:1">&times;</button>
+    </div>
+    <div id="abFormulaGrid"></div>
+  </div>
+</div>
+
 <!-- ═══ Socket.IO Client ═══ -->
 <script src="/socket.io.min.js"></script>
 
@@ -471,6 +482,38 @@
   /* ═══ Multi-Account State ═══ */
   var accounts = [];        // [{ phone, lotteryToken, webapiToken }]
   var currentView = null;   // phone of the account currently displayed
+
+  var FORMULAS = {
+    kingpin3: { name: '👑 KINGPIN 3.0',     desc: 'Last 2 numbers → 4 modular candidate formulas, majority BIG/SMALL vote (tie→BIG)', tags: ['KINGPIN', 'Modular', '4-Vote'] },
+    zigzag:   { name: '⚡ ZigZag',          desc: 'Pure BIG↔SMALL toggle — opposite of last result, flips every period', tags: ['ZigZag', 'Toggle'] },
+    oracle:   { name: '🔮 ORACLE',          desc: 'Last-10 mean reversion: ratio>65% BIG→SMALL, ratio<35%→BIG, else ZigZag', tags: ['Adaptive', 'Mean-Reversion'] },
+    kaala:    { name: '🕶️ Kaala',           desc: 'Streak detector (last 18): 4+ same → reverse, else ORACLE fallback', tags: ['Kaala', 'Streak'] },
+    titan_v3: { name: '⚡ TITAN v3',        desc: '3-loss recovery flip, else ORACLE fallback', tags: ['TITAN', 'Recovery'] },
+    dna3:     { name: '🧬 DNA 3',           desc: '3-result triplet pattern lookup table, else ZigZag fallback', tags: ['DNA', 'Pattern'] },
+    FHaa:     { name: '🔁 FHaa (GRR Loop)', desc: 'GREEN → RED → RED → repeat loop. Level 8 (7+ losses) → OPPOSITE prediction', tags: ['GRR', 'Loop', 'Level8-Flip'] },
+  };
+
+  function renderFormulaGrid(currentFormula) {
+    var grid = document.getElementById('abFormulaGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    Object.keys(FORMULAS).forEach(function(key) {
+      var f = FORMULAS[key];
+      var card = document.createElement('div');
+      card.className = 'ab-formula-card' + (key === currentFormula ? ' selected' : '');
+      card.style.cssText = 'background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px;margin-bottom:8px;cursor:pointer;transition:.2s';
+      if (key === currentFormula) card.style.borderColor = '#4ade80';
+      card.innerHTML = '<div style="font-weight:700;font-size:13px;color:#e0e0ff;margin-bottom:4px">' + f.name + '</div>'
+        + '<div style="font-size:10px;color:#888;line-height:1.4;margin-bottom:6px">' + f.desc + '</div>'
+        + '<div>' + f.tags.map(function(t) { return '<span style="display:inline-block;background:rgba(74,222,128,0.1);color:#4ade80;font-size:8px;padding:2px 6px;border-radius:4px;margin-right:4px">' + t + '</span>'; }).join('') + '</div>';
+      card.onclick = function() {
+        if (socket && currentView) socket.emit('setFormula', { phone: currentView, formula: key });
+        var popup = document.getElementById('abFormulaPopup');
+        if (popup) popup.style.display = 'none';
+      };
+      grid.appendChild(card);
+    });
+  }
   var captchaId    = null;
   var sliderX      = 0;
   var trackData    = [];
@@ -1298,6 +1341,23 @@
   $('abBtnStart').addEventListener('click', function(){
     if (!socket || !currentView) return;
     socket.emit('start', { phone: currentView });
+  });
+
+  // Formula Popup
+  $('abBtnFormulaPopup').addEventListener('click', function(e) {
+    e.stopPropagation();
+    renderFormulaGrid($('abFormulaName').textContent);
+    $('abFormulaPopup').style.display = 'flex';
+  });
+  $('abFormulaActive').addEventListener('click', function() {
+    renderFormulaGrid($('abFormulaName').textContent);
+    $('abFormulaPopup').style.display = 'flex';
+  });
+  $('abBtnFormulaClose').addEventListener('click', function(){
+    $('abFormulaPopup').style.display = 'none';
+  });
+  $('abFormulaPopup').addEventListener('click', function(e){
+    if (e.target === this) this.style.display = 'none';
   });
 
   // Stop
