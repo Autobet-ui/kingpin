@@ -54669,7 +54669,7 @@ function startPolling(io3, acct) {
       if (!pd) return;
       const { period, countdown, total } = pd;
       acct.currentPeriod = period;
-      broadcast(io3, acct.phone, "countdown", { secs: countdown, total });
+      broadcast(io3, acct.phone, "countdown", { secs: countdown, total, period });
       const periodChanged = period !== lastPeriod;
       if (periodChanged && lastPeriod && acct.betPlaced && acct.lastPrediction) {
         await new Promise((r) => setTimeout(r, 2e3));
