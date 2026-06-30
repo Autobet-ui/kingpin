@@ -54342,9 +54342,9 @@ async function fetchBalance(acct) {
   return acct.balance;
 }
 async function fetchCurrentPeriod(acct) {
-  // Primary: public history API (reliable, no-login, gives latest issue)
+  // Primary: public history API (reliable, no-login, gives latest issue) — pageSize=100 like 090.html
   try {
-    const url = `${PUBLIC_HISTORY_URL}?pageNo=1&pageSize=1&gameId=1`;
+    const url = `${PUBLIC_HISTORY_URL}?pageNo=1&pageSize=100&gameId=1&t=${Date.now()}`;
     const res = await fetch(url, {
       headers: { "Accept": "application/json, */*", "User-Agent": GOA_UA_HEADERS["User-Agent"] },
       signal: AbortSignal.timeout(8e3)
@@ -54361,7 +54361,8 @@ async function fetchCurrentPeriod(acct) {
           const nowMs = Date.now();
           const secsIntoCycle = Math.floor(nowMs / 1e3) % 30;
           const countdown = 30 - secsIntoCycle;
-          return { period: nextPeriod, countdown, total: 30 };
+          acct._lastFetchedList = list;
+          return { period: nextPeriod, countdown, total: 30, latestIssue: lastIssue, list };
         }
       }
     }
@@ -54422,6 +54423,10 @@ async function fetchResultsPublic(size = 50) {
   return [];
 }
 async function fetchLastResults(acct, size = 50) {
+  // Reuse list from fetchCurrentPeriod if available (single-fetch pattern like 090.html)
+  if (acct._lastFetchedList && Array.isArray(acct._lastFetchedList) && acct._lastFetchedList.length >= 6) {
+    return parseResultList(acct._lastFetchedList.slice(0, size));
+  }
   const pub = await fetchResultsPublic(size);
   if (pub.length >= 6) return pub;
   try {
@@ -54454,6 +54459,19 @@ async function placeBet(acct, pred, amt, period) {
   }
 }
 async function checkBetResult(acct, period) {
+  // Primary: use cached public list (fast, no extra API call)
+  try {
+    if (acct._lastFetchedList && Array.isArray(acct._lastFetchedList)) {
+      const row = acct._lastFetchedList.find((i) => String(i["issueNumber"] ?? i["issue"]) === period);
+      if (row) {
+        const num = parseInt(String(row["number"] ?? row["num"] ?? 0));
+        const result = numberToColor(num);
+        const win = colorsMatch(acct.lastPrediction, result);
+        const amt = acct.levels[acct.currentLevel - 1] ?? acct.config.baseAmt;
+        return { result, win, pnl: win ? +(amt * 0.95).toFixed(2) : -amt };
+      }
+    }
+  } catch (_) {}
   try {
     const r = await goaPost2("/WinGo/GetIssueList", { pageNo: 1, pageSize: 5, typeId: TYPE_ID }, acct.webapiToken || acct.lotteryToken);
     if (r["code"] === 0) {
