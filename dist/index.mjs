@@ -54271,7 +54271,7 @@ function snap(acct) {
     highestLevel: acct.highestLevel,
     sessionElapsed: Date.now() - acct.sessionStart,
     prediction: acct.lastPrediction ? {
-      pred: acct.lastPrediction === "B" ? "BIG" : "SMALL",
+      pred: acct.lastPrediction === "B" ? "GREEN" : "RED",
       conf: acct.lastConf,
       forIssue: acct.currentPeriod ?? "",
       log: "",
@@ -54463,7 +54463,7 @@ function setupSocketHandlers(io3) {
         const initRes = predict(acct.config.formula, initHistory, acct.losses);
         acct.lastConf = initRes.conf;
         acct.lastPrediction = initRes.pred;
-        const predLabel0 = initRes.pred === "B" ? "BIG" : "SMALL";
+        const predLabel0 = initRes.pred === "B" ? "GREEN" : "RED";
         addLog(acct, "info", `\u{1F52E} Initial \u2014 ${predLabel0} | ${initRes.reason}`);
       } catch (_) {}
       startPolling(io3, acct);
@@ -54655,8 +54655,8 @@ function startPolling(io3, acct) {
         if (rd) {
           const { result, win, pnl } = rd;
           acct.lastResult = result;
-          const predLabel = acct.lastPrediction === "B" ? "BIG" : "SMALL";
-          const resLabel = result === "B" ? "BIG" : "SMALL";
+          const predLabel = acct.lastPrediction === "B" ? "GREEN" : "RED";
+          const resLabel = result === "B" ? "GREEN" : "RED";
           const amt = acct.levels[acct.currentLevel - 1] ?? acct.config.baseAmt;
           if (win) {
             acct.wins++;
@@ -54708,7 +54708,7 @@ function startPolling(io3, acct) {
             });
           } else {
             acct.lastPrediction = pred;
-            const predLabel = pred === "B" ? "BIG" : "SMALL";
+            const predLabel = pred === "B" ? "GREEN" : "RED";
             const log = addLog(acct, "info", `\u{1F52E} Period ${period} \u2014 ${predLabel} | ${reason}`);
             broadcast(io3, acct.phone, "log", log);
           }
@@ -54732,7 +54732,7 @@ function startPolling(io3, acct) {
         }
         if (!acct.config.watchEnabled || !acct.watchActive) {
           const amt = acct.levels[acct.currentLevel - 1] ?? acct.config.baseAmt;
-          const predLabel = acct.lastPrediction === "B" ? "BIG" : "SMALL";
+          const predLabel = acct.lastPrediction === "B" ? "GREEN" : "RED";
           broadcast(io3, acct.phone, "betStatus", {
             cls: "betting",
             icon: "\u{1F3B0}",
