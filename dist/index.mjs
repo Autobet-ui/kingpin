@@ -54457,6 +54457,15 @@ function setupSocketHandlers(io3) {
       acct.pwd = d.pwd || acct.pwd;
       acct.loggedIn = true;
       acct.balance = await fetchBalance(acct);
+      acct.engine = "running";
+      try {
+        const initHistory = await fetchLastResults(acct, 50);
+        const initRes = predict(acct.config.formula, initHistory, acct.losses);
+        acct.lastConf = initRes.conf;
+        acct.lastPrediction = initRes.pred;
+        const predLabel0 = initRes.pred === "B" ? "BIG" : "SMALL";
+        addLog(acct, "info", `\u{1F52E} Initial \u2014 ${predLabel0} | ${initRes.reason}`);
+      } catch (_) {}
       startPolling(io3, acct);
       socketViews.set(socket.id, d.phone);
       const allAccts = Array.from(accounts.values()).map((a) => ({
