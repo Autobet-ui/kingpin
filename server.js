@@ -183,9 +183,40 @@ function makeState(phone) {
 }
 
 // ══════════════════════════════════════════════════
-//  GOA GAMES API CALLS  (with MD5 signature, matches verified backend)
+//  PUBLIC WINGO 30S HISTORY (no auth needed — primary source)
 // ══════════════════════════════════════════════════
-const crypto = require('crypto');
+const PUBLIC_HISTORY_URL = 'https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json';
+
+async function fetchPublicList(size) {
+  try {
+    var url = PUBLIC_HISTORY_URL + '?pageNo=1&pageSize=' + (size || 50) + '&gameId=1';
+    var res = await axios.get(url, {
+      headers: { 'Accept': 'application/json, */*', 'User-Agent': 'Mozilla/5.0 (Linux; Android 12; SM-G991B Build/SP1A.210812.016) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.230 Mobile Safari/537.36' },
+      timeout: 8000
+    });
+    var json = res.data;
+    var data = json.data || json;
+    var list = (data && (data.list || data.issueList || data.data)) || json.list || [];
+    if (Array.isArray(list) && list.length > 0) return list;
+  } catch(e) {}
+  return [];
+}
+
+// Get current/next period from public source (reliable, no login needed)
+async function getCurrentIssuePublic() {
+  var list = await fetchPublicList(1);
+  if (list.length > 0) {
+    var lastIssue = String(list[0].issueNumber || list[0].issue || '');
+    if (lastIssue && /^\d+$/.test(lastIssue)) {
+      var nextPeriod = String(BigInt(lastIssue) + 1n);
+      var secsIntoCycle = Math.floor(Date.now() / 1000) % 30;
+      return { issueNumber: nextPeriod, remainTime: 30 - secsIntoCycle, lastIssue, lastNumber: parseInt(list[0].number) };
+    }
+  }
+  return null;
+}
+
+
 
 const GOA_API = GOA_BASE + '/api/webapi';
 const EXCLUDED_FROM_SIGN = ['signature', 'track', 'xosoBettingData'];
@@ -255,32 +286,44 @@ async function getBalance(token) {
   return 0;
 }
 
-// GET current issue / countdown
+// GET current issue / countdown (public source primary, GOA fallback)
 async function getCurrentIssue(token) {
-  var r = await goaRequest('/WinGo/GetIssueList', { pageNo: 1, pageSize: 1, typeId: 30 }, token);
-  if (r && r.code === 0 && r.data && r.data.list && r.data.list[0]) {
-    var item = r.data.list[0];
-    var lastIssue = String(item.issueNumber || item.issue || '');
-    if (lastIssue && /^\d+$/.test(lastIssue)) {
-      var nextPeriod = String(BigInt(lastIssue) + 1n);
-      var secsIntoCycle = Math.floor(Date.now() / 1000) % 30;
-      return { issueNumber: nextPeriod, countdown: 30 - secsIntoCycle, totalTime: 30 };
+  var pub = await getCurrentIssuePublic();
+  if (pub) return pub;
+  try {
+    var r = await goaRequest('/WinGo/GetIssueList', { pageNo: 1, pageSize: 1, typeId: 30 }, token);
+    if (r && r.code === 0 && r.data && r.data.list && r.data.list[0]) {
+      var item = r.data.list[0];
+      var lastIssue = String(item.issueNumber || item.issue || '');
+      if (lastIssue && /^\d+$/.test(lastIssue)) {
+        var nextPeriod = String(BigInt(lastIssue) + 1n);
+        var secsIntoCycle = Math.floor(Date.now() / 1000) % 30;
+        return { issueNumber: nextPeriod, remainTime: 30 - secsIntoCycle };
+      }
     }
-  }
+  } catch(e) {}
   return null;
 }
 
-// GET last result
+// GET last result (public source primary, GOA fallback)
 async function getLastResult(token) {
-  var r = await goaRequest('/WinGo/GetIssueList', { pageNo: 1, pageSize: 1, typeId: 30 }, token);
-  if (r && r.code === 0 && r.data && r.data.list && r.data.list[0]) return r.data.list[0];
+  var list = await fetchPublicList(1);
+  if (list.length > 0) return list[0];
+  try {
+    var r = await goaRequest('/WinGo/GetIssueList', { pageNo: 1, pageSize: 1, typeId: 30 }, token);
+    if (r && r.code === 0 && r.data && r.data.list && r.data.list[0]) return r.data.list[0];
+  } catch(e) {}
   return null;
 }
 
-// GET history for prediction
+// GET history for prediction (public source primary, GOA fallback)
 async function getHistory(token, size) {
-  var r = await goaRequest('/WinGo/GetIssueList', { pageNo: 1, pageSize: size || 20, typeId: 30 }, token);
-  if (r && r.code === 0 && r.data && r.data.list) return r.data.list;
+  var list = await fetchPublicList(size || 20);
+  if (list.length > 0) return list;
+  try {
+    var r = await goaRequest('/WinGo/GetIssueList', { pageNo: 1, pageSize: size || 20, typeId: 30 }, token);
+    if (r && r.code === 0 && r.data && r.data.list) return r.data.list;
+  } catch(e) {}
   return [];
 }
 
