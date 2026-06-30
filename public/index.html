@@ -640,6 +640,9 @@
       $('abCD').textContent = d.secs + 's';
       var pct = ((d.total - d.secs) / d.total * 100).toFixed(1);
       $('abHeroBar').style.width = pct + '%';
+      if (d.period) {
+        $('abPeriod').textContent = '...' + String(d.period).slice(-5);
+      }
     });
 
     /* ── Activity log ── */
