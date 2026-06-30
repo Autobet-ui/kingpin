@@ -54510,12 +54510,14 @@ function setupSocketHandlers(io3) {
       acct.balance = await fetchBalance(acct);
       acct.engine = "running";
       try {
+        const initPd = await fetchCurrentPeriod(acct);
+        if (initPd) acct.currentPeriod = initPd.period;
         const initHistory = await fetchLastResults(acct, 50);
         const initRes = predict(acct.config.formula, initHistory, acct.losses);
         acct.lastConf = initRes.conf;
         acct.lastPrediction = initRes.pred;
         const predLabel0 = colorLabel(initRes.pred);
-        addLog(acct, "info", `\u{1F52E} Initial \u2014 ${predLabel0} | ${initRes.reason}`);
+        addLog(acct, "info", `\u{1F52E} Initial Period ${acct.currentPeriod || ""} \u2014 ${predLabel0} | ${initRes.reason}`);
       } catch (_) {}
       startPolling(io3, acct);
       socketViews.set(socket.id, d.phone);
