@@ -7,12 +7,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/autobet.css" />
-  <!-- Firebase SDK — xgteam-4da84 (Admin Panel se connected) -->
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-  <script>
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, onValue, set, remove, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
     // ══════════════════════════════════════════
-    //  🔥 FIREBASE — xgteam-4da84 (Admin Panel)
+    //  🔥 FIREBASE CONFIG — KINGPIN Admin Panel से connected
+    //  (xgteam-4da84 project)
     // ══════════════════════════════════════════
     const firebaseConfig = {
       apiKey: "AIzaSyDJCCTkjtFY-Cs4NZHLL2his2frfw-VStY",
@@ -23,34 +25,40 @@
       messagingSenderId: "1064087545075",
       appId: "1:1064087545075:android:75c07b416dda8472718386"
     };
-    firebase.initializeApp(firebaseConfig);
-    var _kpDB = firebase.database();
 
-    // ── Device ID ──
-    var _kpDeviceId = localStorage.getItem('KP_device_id');
-    if (!_kpDeviceId) {
-      var _c = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-      _kpDeviceId = Array.from({length:12},function(){return _c[Math.floor(Math.random()*_c.length)];}).join('');
-      localStorage.setItem('KP_device_id', _kpDeviceId);
+    const firebaseApp = initializeApp(firebaseConfig);
+    const db = getDatabase(firebaseApp);
+
+    // ── Device ID generation / retrieval ──
+    let deviceId = localStorage.getItem('KP_device_id');
+    if (!deviceId) {
+      const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      deviceId = Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+      localStorage.setItem('KP_device_id', deviceId);
     }
-    window.KP_DEVICE_ID = _kpDeviceId;
+    window.KP_DEVICE_ID = deviceId;
+    window.KP_DB = db;
+    window.KP_DB_REF = ref;
+    window.KP_DB_SET = set;
+    window.KP_DB_REMOVE = remove;
+    window.KP_DB_GET = get;
 
-    // ── Show device ID ──
-    document.addEventListener('DOMContentLoaded', function() {
-      var el = document.getElementById('fbDeviceIdDisplay');
-      if (el) el.textContent = _kpDeviceId;
-    });
+    // ── Show device ID in gate ──
+    const dispEl = document.getElementById('fbDeviceIdDisplay');
+    if (dispEl) dispEl.textContent = deviceId;
 
-    // ── Check authorization via approved_devices ──
-    _kpDB.ref('approved_devices/' + _kpDeviceId).on('value', function(snapshot) {
-      var data = snapshot.val();
-      var gate = document.getElementById('fbDeviceGate');
-      var statusEl = document.getElementById('fbGateStatus');
-      var dispEl = document.getElementById('fbDeviceIdDisplay');
+    // ── Check device authorization ──
+    const deviceRef = ref(db, 'approved_devices/' + deviceId);
+    onValue(deviceRef, (snapshot) => {
+      const data = snapshot.val();
+      const gate = document.getElementById('fbDeviceGate');
+      const statusEl = document.getElementById('fbGateStatus');
+      const dispEl2 = document.getElementById('fbDeviceIdDisplay');
 
-      if (dispEl) dispEl.textContent = _kpDeviceId;
+      if (dispEl2) dispEl2.textContent = deviceId;
 
       if (!data) {
+        // Not in database
         if (statusEl) {
           statusEl.style.color = '#f87171';
           statusEl.style.background = 'rgba(248,113,113,0.08)';
@@ -64,29 +72,33 @@
       }
 
       if (data.status === 'active') {
+        // Check expiry
         if (data.expiry && Date.now() > data.expiry) {
           if (statusEl) {
             statusEl.style.color = '#fbbf24';
-            statusEl.textContent = '⏰ Subscription Expired! Contact admin to renew.';
+            statusEl.textContent = '⏰ Subscription Expired! Please contact admin to renew.';
           }
           if (gate) gate.style.display = 'flex';
           window.KP_FIREBASE_AUTHORIZED = false;
           window.KP_PRO_ACCESS = false;
         } else {
+          // ✅ Authorized!
           window.KP_FIREBASE_AUTHORIZED = true;
           window.KP_PRO_ACCESS = (data.proRexen === true || data.pro_rexen_access === true);
+
           if (statusEl) {
             statusEl.style.color = '#4ade80';
             statusEl.style.background = 'rgba(74,222,128,0.08)';
             statusEl.style.borderColor = 'rgba(74,222,128,0.2)';
-            var expDays = data.expiry ? Math.ceil((data.expiry - Date.now()) / 86400000) : '∞';
+            const expDays = data.expiry ? Math.ceil((data.expiry - Date.now()) / 86400000) : '∞';
             statusEl.textContent = '✅ Access Granted! Expires in ' + expDays + ' day(s)';
           }
+
           if (gate) {
-            setTimeout(function() {
+            setTimeout(() => {
               gate.style.opacity = '0';
               gate.style.transform = 'scale(0.96)';
-              setTimeout(function() { gate.style.display = 'none'; }, 450);
+              setTimeout(() => { gate.style.display = 'none'; }, 450);
             }, 1200);
           }
         }
@@ -1696,5 +1708,5 @@
   }
 </script>
 
-</body>
+<script src="https://replit-cdn.com/replit-pill/replit-pill.global.js" data-repl-id="54ce0cac-2f71-4346-8c9b-c94692e48c21"></script></body>
 </html>
