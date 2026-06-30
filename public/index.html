@@ -3,145 +3,148 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-  <title>KINGPIN 4.0 — Auto Bet</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f81f7'/%3E%3Ctext x='16' y='23' font-size='19' font-family='Arial,sans-serif' font-weight='bold' fill='white' text-anchor='middle'%3EK%3C/text%3E%3C/svg%3E" />
+  <title>KINGPIN 3.0 — Auto Bet</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/css/autobet.css" />
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getDatabase, ref, onValue, set, remove, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    // ══════════════════════════════════════════
+    //  🔥 FIREBASE CONFIG — KINGPIN Admin Panel से connected
+    //  (xgteam-4da84 project)
+    // ══════════════════════════════════════════
+    const firebaseConfig = {
+      apiKey: "AIzaSyDJCCTkjtFY-Cs4NZHLL2his2frfw-VStY",
+      authDomain: "xgteam-4da84.firebaseapp.com",
+      databaseURL: "https://xgteam-4da84-default-rtdb.firebaseio.com",
+      projectId: "xgteam-4da84",
+      storageBucket: "xgteam-4da84.firebasestorage.app",
+      messagingSenderId: "1064087545075",
+      appId: "1:1064087545075:android:75c07b416dda8472718386"
+    };
+
+    const firebaseApp = initializeApp(firebaseConfig);
+    const db = getDatabase(firebaseApp);
+
+    // ── Device ID generation / retrieval ──
+    let deviceId = localStorage.getItem('KP_device_id');
+    if (!deviceId) {
+      const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      deviceId = Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+      localStorage.setItem('KP_device_id', deviceId);
+    }
+    window.KP_DEVICE_ID = deviceId;
+    window.KP_DB = db;
+    window.KP_DB_REF = ref;
+    window.KP_DB_SET = set;
+    window.KP_DB_REMOVE = remove;
+    window.KP_DB_GET = get;
+
+    // ── Show device ID in gate ──
+    const dispEl = document.getElementById('fbDeviceIdDisplay');
+    if (dispEl) dispEl.textContent = deviceId;
+
+    // ── Check device authorization ──
+    const deviceRef = ref(db, 'approved_devices/' + deviceId);
+    onValue(deviceRef, (snapshot) => {
+      const data = snapshot.val();
+      const gate = document.getElementById('fbDeviceGate');
+      const statusEl = document.getElementById('fbGateStatus');
+      const dispEl2 = document.getElementById('fbDeviceIdDisplay');
+
+      if (dispEl2) dispEl2.textContent = deviceId;
+
+      if (!data) {
+        // Not in database
+        if (statusEl) {
+          statusEl.style.color = '#f87171';
+          statusEl.style.background = 'rgba(248,113,113,0.08)';
+          statusEl.style.borderColor = 'rgba(248,113,113,0.2)';
+          statusEl.textContent = '❌ Device not authorized. Contact admin with your Device ID.';
+        }
+        if (gate) gate.style.display = 'flex';
+        window.KP_FIREBASE_AUTHORIZED = false;
+        window.KP_PRO_ACCESS = false;
+        return;
+      }
+
+      if (data.status === 'active') {
+        // Check expiry
+        if (data.expiry && Date.now() > data.expiry) {
+          if (statusEl) {
+            statusEl.style.color = '#fbbf24';
+            statusEl.textContent = '⏰ Subscription Expired! Please contact admin to renew.';
+          }
+          if (gate) gate.style.display = 'flex';
+          window.KP_FIREBASE_AUTHORIZED = false;
+          window.KP_PRO_ACCESS = false;
+        } else {
+          // ✅ Authorized!
+          window.KP_FIREBASE_AUTHORIZED = true;
+          window.KP_PRO_ACCESS = (data.proRexen === true || data.pro_rexen_access === true);
+
+          if (statusEl) {
+            statusEl.style.color = '#4ade80';
+            statusEl.style.background = 'rgba(74,222,128,0.08)';
+            statusEl.style.borderColor = 'rgba(74,222,128,0.2)';
+            const expDays = data.expiry ? Math.ceil((data.expiry - Date.now()) / 86400000) : '∞';
+            statusEl.textContent = '✅ Access Granted! Expires in ' + expDays + ' day(s)';
+          }
+
+          if (gate) {
+            setTimeout(() => {
+              gate.style.opacity = '0';
+              gate.style.transform = 'scale(0.96)';
+              setTimeout(() => { gate.style.display = 'none'; }, 450);
+            }, 1200);
+          }
+        }
+      } else {
+        if (statusEl) {
+          statusEl.style.color = '#fbbf24';
+          statusEl.textContent = '🔒 Account inactive. Contact admin to activate.';
+        }
+        if (gate) gate.style.display = 'flex';
+        window.KP_FIREBASE_AUTHORIZED = false;
+        window.KP_PRO_ACCESS = false;
+      }
+    });
+  </script>
 </head>
 <body>
 
-<!-- ═══ SOURCE GUARD — friction layer (bypassed only by DEFAULT_KEY super-user) ═══ -->
-<script>
-(function kpSourceGuard(){
-  /* Locked for everyone EXCEPT the default super-user key. The flag is set after
-     the key gate validates; until then (and for all regular keys) we lock down. */
-  function locked(){ return sessionStorage.getItem('kp_is_default') !== '1'; }
+<!-- ═══ FIREBASE DEVICE GATE ═══ -->
+<div id="fbDeviceGate" style="
+  position:fixed;inset:0;z-index:99999;
+  background:radial-gradient(ellipse at 50% 0%, #1A1A3E 0%, #07070F 70%);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-family:'JetBrains Mono',monospace;
+  transition:opacity 0.5s ease, transform 0.5s ease;
+">
+  <div style="text-align:center;padding:30px 24px;max-width:340px;width:100%">
+    <div style="font-size:28px;font-weight:900;letter-spacing:3px;color:#fff;margin-bottom:4px;font-family:'Orbitron',sans-serif">KINGPIN</div>
+    <div style="font-size:11px;color:#6677aa;letter-spacing:2px;margin-bottom:24px">DEVICE VERIFICATION</div>
 
-  /* Block right-click context menu */
-  document.addEventListener('contextmenu', function(e){ if(locked()){ e.preventDefault(); return false; } }, true);
-
-  /* Block view-source / save / print / devtools shortcuts */
-  document.addEventListener('keydown', function(e){
-    if(!locked()) return;
-    var k = (e.key || '').toLowerCase();
-    var ctrl = e.ctrlKey || e.metaKey;
-    if(
-      e.key === 'F12' ||
-      (ctrl && e.shiftKey && (k==='i' || k==='j' || k==='c')) ||  /* DevTools / inspect / console */
-      (ctrl && (k==='u')) ||                                       /* view source */
-      (ctrl && (k==='s')) ||                                       /* save page */
-      (ctrl && (k==='p'))                                          /* print */
-    ){ e.preventDefault(); e.stopPropagation(); return false; }
-  }, true);
-
-  /* Block image/text drag-out */
-  document.addEventListener('dragstart', function(e){ if(locked()) e.preventDefault(); }, true);
-
-  /* Toggle a body class so CSS can disable text selection while locked */
-  function apply(){ if(document.body) document.body.classList.toggle('kp-locked', locked()); }
-  if(document.readyState !== 'loading') apply();
-  else document.addEventListener('DOMContentLoaded', apply);
-  window.kpApplySourceGuard = apply;   /* re-called after the key gate resolves */
-})();
-</script>
-
-<!-- ═══ REUSABLE LOGO (yin-yang + circuit ring) ═══ -->
-<svg width="0" height="0" style="position:absolute" aria-hidden="true">
-  <symbol id="kpMark" viewBox="0 0 100 100">
-    <defs>
-      <linearGradient id="kpg" x1="0" y1="0" x2="1" y2="1">
-        <stop offset="0" stop-color="#58a6ff"/><stop offset="1" stop-color="#2f81f7"/>
-      </linearGradient>
-    </defs>
-    <circle cx="50" cy="50" r="47" fill="none" stroke="url(#kpg)" stroke-width="1.4" stroke-dasharray="3 5" opacity=".75"/>
-    <circle cx="50" cy="3" r="2.4" fill="#58a6ff"/><circle cx="97" cy="50" r="2.4" fill="#58a6ff"/>
-    <circle cx="50" cy="97" r="2.4" fill="#58a6ff"/><circle cx="3" cy="50" r="2.4" fill="#58a6ff"/>
-    <circle cx="50" cy="50" r="40" fill="url(#kpg)"/>
-    <path d="M50,10 a40,40 0 0,1 0,80 a20,20 0 0,1 0,-40 a20,20 0 0,0 0,-40z" fill="#0d1117"/>
-    <circle cx="50" cy="30" r="6" fill="#0d1117"/><circle cx="50" cy="70" r="6" fill="url(#kpg)"/>
-    <circle cx="50" cy="30" r="2" fill="#58a6ff"/><circle cx="50" cy="70" r="2" fill="#0d1117"/>
-  </symbol>
-</svg>
-
-<!-- ═══ KEY GATE ═══ -->
-<div id="rootGate">
-  <div class="kp-gate-inner">
-    <svg class="kp-logo kp-gate-mark" width="64" height="64" aria-hidden="true"><use href="#kpMark"/></svg>
-    <div class="kp-gate-logo">KINGPIN</div>
-    <div class="kp-gate-sub">LICENSE KEY REQUIRED</div>
-
-    <div class="kp-input-label">LICENSE KEY</div>
-    <div class="kp-input-row">
-      <span class="kp-prompt">❯</span>
-      <input type="text" id="rootKey" placeholder="XXXXX-XXXXX-XXXXX-XXXXX-XXXXX"
-             maxlength="29" autocomplete="off" autocapitalize="characters"
-             style="letter-spacing:2px;font-family:'JetBrains Mono',monospace;font-size:13px" />
+    <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:20px;margin-bottom:20px">
+      <div style="font-size:10px;color:#555577;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Your Device ID</div>
+      <div id="fbDeviceIdDisplay" style="font-size:13px;color:#a78bfa;font-weight:700;letter-spacing:1px;word-break:break-all;margin-bottom:10px">Generating...</div>
+      <button onclick="copyDeviceId()" style="background:rgba(108,99,255,0.15);border:1px solid rgba(108,99,255,0.3);color:#a78bfa;padding:6px 16px;border-radius:8px;font-size:11px;cursor:pointer;font-family:inherit">📋 Copy ID</button>
     </div>
 
-    <div class="kp-gate-err" id="rootErr"></div>
-    <button class="kp-btn-main" id="rootBtn" style="margin-top:14px">UNLOCK</button>
+    <div id="fbGateStatus" style="min-height:40px;font-size:12px;color:#fbbf24;text-align:center;margin-bottom:16px;padding:10px;background:rgba(251,191,36,0.08);border-radius:8px;border:1px solid rgba(251,191,36,0.15)">
+      ⏳ Checking device authorization...
+    </div>
+
+    <button onclick="window.open('https://t.me/RAMPHDi','_blank')" style="
+      width:100%;padding:13px;background:linear-gradient(135deg,#6C63FF,#00D4FF);
+      border:none;border-radius:10px;color:#fff;font-size:13px;font-weight:700;
+      cursor:pointer;font-family:inherit;letter-spacing:1px
+    ">📩 Contact Admin to Activate</button>
   </div>
 </div>
-<script>
-(function(){
-  var G  = document.getElementById('rootGate');
-  var KI = document.getElementById('rootKey');
-  var E  = document.getElementById('rootErr');
-  var B  = document.getElementById('rootBtn');
-
-  /* Already unlocked this session? Only skip gate if BOTH valid flag AND key are present */
-  if(sessionStorage.getItem('kp_key_valid')==='1' && sessionStorage.getItem('kp_key')){
-    G.style.display='none'; return;
-  }
-  /* Clear any stale/old session data so gate shows fresh */
-  sessionStorage.removeItem('kp_key_valid');
-  sessionStorage.removeItem('kp_key');
-  sessionStorage.removeItem('kp_is_default');
-  sessionStorage.removeItem('kp_bound_phone');
-  sessionStorage.removeItem('kp_session_id');
-
-  /* Auto-format key as user types: XXXXX-XXXXX-XXXXX-XXXXX-XXXXX */
-  KI.addEventListener('input', function(){
-    var raw = KI.value.replace(/[^A-Za-z0-9]/g,'').toUpperCase().slice(0,25);
-    var fmt = raw.match(/.{1,5}/g);
-    KI.value = fmt ? fmt.join('-') : raw;
-  });
-
-  function unlock(){
-    var key = KI.value.trim();
-    if(!key){ E.textContent='Enter your license key'; return; }
-
-    B.disabled=true; B.textContent='Checking...'; E.textContent='';
-    fetch('/api/keys/check',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ key: key })
-    })
-    .then(function(r){ return r.json(); })
-    .then(function(d){
-      if(d.ok){
-        sessionStorage.setItem('kp_key_valid','1');
-        sessionStorage.setItem('kp_key', key);
-        sessionStorage.setItem('kp_is_default', d.isDefault ? '1' : '0');
-        sessionStorage.setItem('kp_bound_phone', d.boundPhone || '');
-        G.style.display='none';
-        /* Re-apply permissions now that sessionStorage is populated */
-        if(typeof applyKeyPermissions === 'function') applyKeyPermissions();
-      } else {
-        E.textContent = d.msg || 'Invalid or disabled key';
-        KI.style.borderColor='var(--red)';
-        setTimeout(function(){ KI.style.borderColor=''; E.textContent=''; }, 2000);
-      }
-    })
-    .catch(function(){ E.textContent='Server error'; })
-    .finally(function(){ B.disabled=false; B.textContent='UNLOCK'; });
-  }
-
-  B.addEventListener('click', unlock);
-  KI.addEventListener('keydown', function(e){ if(e.key==='Enter') unlock(); });
-})();
-</script>
 
 <!-- ═══ TOAST ═══ -->
 <div id="abToastWrap" class="ab-toast-wrap"></div>
@@ -149,9 +152,8 @@
 <!-- ═══ LOGIN ═══ -->
 <div id="abLoginSection" class="kp-screen">
   <div class="kp-gate-inner">
-    <svg class="kp-logo kp-gate-mark" width="64" height="64" aria-hidden="true"><use href="#kpMark"/></svg>
     <div class="kp-gate-logo">KINGPIN</div>
-    <div class="kp-gate-sub">AUTO BET ENGINE 4.0</div>
+    <div class="kp-gate-sub">AUTO BET ENGINE 3.0</div>
 
     <div class="kp-input-label">PHONE</div>
     <input type="tel" id="abPhone" placeholder="Phone number" autocomplete="off" style="margin-bottom:10px" />
@@ -188,36 +190,19 @@
   <!-- HEADER -->
   <header class="kp-header">
     <div class="kp-brand">
-      <svg class="kp-logo" width="30" height="30" aria-hidden="true"><use href="#kpMark"/></svg>
-      <span class="kp-brand-text">KINGPIN</span>
-      <span class="kp-brand-ver">4.0</span>
+      <span class="kp-brand-text">♠ KINGPIN</span>
+      <span class="kp-brand-ver">3.0</span>
     </div>
     <div class="kp-header-spacer"></div>
     <div class="kp-balance" id="abBalance">₹—</div>
     <div class="ab-engine-pill" id="abEngine">STOPPED</div>
-    <button class="kp-btn-logout" id="abBtnLogout" title="Logout this account"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg></button>
+    <button class="kp-btn-logout" id="abBtnLogout" title="Logout this account">⏻</button>
   </header>
 
-  <!-- ACCOUNTS BAR (admin) -->
+  <!-- ACCOUNTS BAR -->
   <div class="kp-accounts-bar" id="abAccountsBar">
-    <button class="kp-acct-listbtn" id="abBtnAcctList" title="Switch account">
-      <span class="kp-acct-listbtn-ic">👥</span>
-      <span class="kp-acct-listbtn-cur" id="abAcctCurLabel">No account</span>
-      <span class="kp-acct-listbtn-count" id="abAcctCount">0</span>
-      <span class="kp-acct-listbtn-caret">▾</span>
-    </button>
+    <div class="kp-acct-tabs" id="abAcctTabs"></div>
     <button class="kp-acct-add" id="abBtnAddAcct" title="Add Account" style="display:none">＋</button>
-  </div>
-
-  <!-- ACCOUNTS POPUP (admin) -->
-  <div class="kp-acct-modal" id="abAcctModal">
-    <div class="kp-acct-modal-box">
-      <div class="kp-acct-modal-head">
-        <span>Accounts <small id="abAcctModalCount"></small></span>
-        <button class="kp-acct-modal-close" id="abAcctModalClose">✕</button>
-      </div>
-      <div class="kp-acct-modal-list" id="abAcctModalList"></div>
-    </div>
   </div>
 
   <!-- TWO COLUMN GRID -->
@@ -233,6 +218,11 @@
           <span class="kp-hero-period" id="abPeriod">—</span>
         </div>
         <div class="ab-hero-pred pred-wait" id="abPred">WAIT</div>
+        <div class="kp-conf-row" id="abConfRow" style="display:none">
+          <span class="kp-conf-label">CONF</span>
+          <div class="kp-conf-bar"><div class="kp-conf-fill" id="abConfFill" style="width:0%"></div></div>
+          <span class="kp-conf-pct" id="abConfPct">—%</span>
+        </div>
         <div class="kp-hero-cd-row">
           <span class="kp-hero-cd" id="abCD">--s</span>
         </div>
@@ -340,16 +330,14 @@
           </div>
           <div class="kp-config-preview" id="abConfigPreview">—</div>
           <div class="kp-divider"></div>
-          <div class="kp-formula-label">⏱️ GAME MODE</div>
-          <div class="kp-mode-toggle" id="abModeToggle">
-            <button type="button" class="kp-mode-btn active" data-mode="WinGo_30S" onclick="setGameMode('WinGo_30S')">⚡ 30 SEC</button>
-            <button type="button" class="kp-mode-btn" data-mode="WinGo_1M" onclick="setGameMode('WinGo_1M')">🕐 1 MIN</button>
+          <div class="kp-formula-label">🧠 PREDICTION ENGINE</div>
+          <div class="kp-formula-active" id="abFormulaActive" style="cursor:default">
+            <span id="abFormulaName">⚡ Shadow Adaptive v14.0</span>
+            <span style="font-size:10px;color:#4ade80;letter-spacing:.06em">ACTIVE ●</span>
           </div>
-          <div class="kp-divider"></div>
-          <div class="kp-formula-label">🧠 PREDICTION FORMULA</div>
-          <div class="kp-formula-active" id="abFormulaActive">
-            <span id="abFormulaName">—</span>
-            <span class="kp-formula-change" id="abBtnFormulaPopup">Change ▸</span>
+          <div style="margin-top:6px;padding:8px 10px;background:rgba(74,222,128,0.04);border:1px solid rgba(74,222,128,0.15);border-radius:8px;font-size:9px;color:#555577;line-height:1.5">
+            8-Strategy Voting · Anti-Streak · Zigzag · FreqBias · DblPair · Mirror · Momentum · Triple · Trend30<br/>
+            <span style="color:#fbbf24">L1/L2 Level-Fix</span> · Confidence-gated ≥63% (≥72% after 2 losses)
           </div>
           <div class="kp-watch-row">
             <div style="flex:1">
@@ -470,19 +458,10 @@
 </div><!-- /dashboard -->
 
 
-<!-- ═══ FORMULA POPUP ═══ -->
-<div class="kp-overlay" id="abFormulaPopup" style="display:none">
-  <div class="kp-modal-box">
-    <div class="kp-modal-head">
-      🧠 SELECT FORMULA
-      <button class="kp-modal-close" id="abBtnFormulaClose">&times;</button>
-    </div>
-    <div class="ab-formula-grid" id="abFormulaGrid"></div>
-  </div>
-</div>
+<!-- Formula popup removed — Shadow Adaptive Engine v14.0 is the single fixed engine -->
 
 <!-- ═══ Socket.IO Client ═══ -->
-<script src="/socket.io/socket.io.js"></script>
+<script src="/socket.io.min.js"></script>
 
 <!-- ═══ MULTI-ACCOUNT LOGIN + DASHBOARD LOGIC ═══ -->
 <script>
@@ -502,12 +481,8 @@
   var betRecordPage = 1;
   var betRecordLoaded = false;
 
-  /* ═══ Key Gate State ═══ */
-  var kpKey            = sessionStorage.getItem('kp_key') || '';
-  var kpSessionId      = sessionStorage.getItem('kp_session_id') || '';
+  /* ═══ Firebase Access State ═══ */
   var kpLastPnl        = 0;
-  var kpBalanceSaved   = false;
-  var kpPendingBalance = 0; // holds balance until sessionId is ready
 
   /* ═══ Persistence ═══ */
   function saveAccounts() {
@@ -520,22 +495,17 @@
   }
   loadAccounts();
 
-  /* Always read these fresh — gate script may have run after IIFE init */
-  function kpGetIsDefault()  { return sessionStorage.getItem('kp_is_default') === '1'; }
-  function kpGetBoundPhone() { return sessionStorage.getItem('kp_bound_phone') || ''; }
-  function kpGetKey()        { return sessionStorage.getItem('kp_key') || ''; }
+  /* PRO access now comes from Firebase (window.KP_PRO_ACCESS), set by the
+     device-gate script in <head>. PRO devices can manage multiple accounts;
+     regular devices are limited to one. */
+  function kpGetIsDefault() { return window.KP_PRO_ACCESS === true; }
 
-  var kpIsDefault   = kpGetIsDefault();
-  var kpBoundPhone  = kpGetBoundPhone();
-  var kpKey         = kpGetKey();
-
+  var kpIsDefault = kpGetIsDefault();
 
   /* Apply super-user vs regular-user UI restrictions.
-     Called once at load and again after gate resolves. */
+     Called once at load and again after the Firebase gate resolves. */
   function applyKeyPermissions() {
-    kpIsDefault  = kpGetIsDefault();
-    kpBoundPhone = kpGetBoundPhone();
-    kpKey        = kpGetKey();
+    kpIsDefault = kpGetIsDefault();
 
     if (!kpIsDefault) {
       /* Remove from DOM entirely — not just hidden, completely gone */
@@ -545,34 +515,18 @@
       if (acctBar) acctBar.remove();
       if (accounts.length > 1) { accounts = accounts.slice(0, 1); saveAccounts(); }
     }
-    lockPhoneField();
-    if (window.kpApplySourceGuard) window.kpApplySourceGuard();   /* unlock right-click etc. for default key */
   }
 
-  /* ═══ Formulas ═══ */
+  /* ═══ Formula — Shadow Adaptive Engine v14.0 (fixed) ═══ */
   var FORMULAS = {
-    dna3:         { name: '🧬 DNA 3',         desc: '3-BS triplet pattern', tags: ['DNA', '160-Deep'] },
-    oracle:       { name: '🔮 ORACLE',        desc: 'Adaptive N-gram + Run-Momentum + Phase-Lock', tags: ['Adaptive', 'Deep', '3-Pillar'] },
-    patdb_v4:     { name: '🎯 PAT_DB v4.0',  desc: '7-layer: Pattern DB + Markov3/2/1 + Streak + Gap + Opposite Rule', tags: ['PAT_DB', '7-Layer'] },
-    titan_v3:     { name: '⚡ TITAN v3',      desc: 'Inverted PAT_DB (51.8% proven) + Recovery after 3L', tags: ['TITAN', 'Recovery'] },
-    cobra_strike: { name: '🐍 Cobra Strike', desc: 'DJB2 hash of issue+SIG7 seed → deterministic B/S signal, conf 75-98', tags: ['Hash', 'Deterministic'] },
-    itachi:       { name: '🔥 Itachi V30',   desc: 'State Machine + 9-len Pattern DB overlay (BULL/BEAR/CHOPPY/EXHAUSTION/HARMONIC)', tags: ['State-ML', '9-PatternDB', 'Multivariate'] },
-    kubera:       { name: '💰 Kubera v2',    desc: '6-engine priority cascade: NumTrans + Streak + Freq + MKV', tags: ['Kubera', '6-Engine'] },
-    hacksoon:     { name: '🔮 Hacksoon',     desc: 'Hybrid: pattern + advanced logic (5x-break, zigzag, chaos, dragon)', tags: ['Hybrid', 'Pattern'] },
-    kaala:        { name: '🕶️ Kaala',         desc: '18-engine cascade: Zigzag(61%) → StrkCont → MKV → NumTrans → Ensemble', tags: ['Kaala', '18-Engine'] },
-    n1n2:         { name: '🎲 N1/N2',        desc: 'Adaptive N1/N2 strategy — switch on loss', tags: ['N1N2', 'Adaptive'] },
-    zigzag:       { name: '⚡ ZigZag',       desc: 'Pure BIG↔SMALL toggle — seeds opposite of first result, flips every period', tags: ['ZigZag', 'Toggle'] },
-    zn1p:         { name: '🗳️ ZN1P',          desc: '3-formula majority vote: DhinaS1 + Last Result + ZigZag', tags: ['ZN1P', 'Majority'] },
-    eip:          { name: '🤖 EIP',           desc: '31-node ensemble: auto-selects best hash/lookback trader by accuracy', tags: ['EIP', '31-Node'] },
-    kutty:        { name: '⭐ KUTTY',         desc: 'Bison-source pair pattern + V1/V2/Emergency state machine, auto-switches on loss', tags: ['KUTTY', 'Pattern', 'State-Machine'] },
-    kingpin3:     { name: '👑 KINGPIN 3.0',  desc: 'Last 2 numbers → 4 modular candidate formulas, majority BIG/SMALL vote (tie→BIG)', tags: ['KINGPIN', 'Modular', '4-Vote'] },
-    engine11:     { name: '🔱 Matrix 11',    desc: '11-formula ensemble majority vote: Mfreq + Pol + EIP + pattern + RAG + N1/N2', tags: ['Matrix11', 'Ensemble', '11-Vote'] },
-    kingpin1m:    { name: '👑 KINGPIN 1M',   desc: 'WinGo 1-Minute engine: Streak Follower (last 3 same → continue) → else Majority Reversal (opposite of last-5 majority). Warms up after 5 rounds.', tags: ['KINGPIN', '1-MIN', 'Streak+Majority'], mode: 'WinGo_1M' },
+    kingpin3: { name: '👑 KINGPIN 3.0',  desc: 'Last 2 numbers → 4 modular candidate formulas, majority BIG/SMALL vote (tie→BIG)', tags: ['KINGPIN', 'Modular', '4-Vote'] },
+    zigzag:   { name: '⚡ ZigZag',       desc: 'Pure BIG↔SMALL toggle — opposite of last result, flips every period', tags: ['ZigZag', 'Toggle'] },
+    oracle:   { name: '🔮 ORACLE',       desc: 'Last-10 mean reversion: ratio>65% BIG→SMALL, ratio<35%→BIG, else ZigZag', tags: ['Adaptive', 'Mean-Reversion'] },
+    kaala:    { name: '🕶️ Kaala',        desc: 'Streak detector (last 18): 4+ same → reverse, else ORACLE fallback', tags: ['Kaala', 'Streak'] },
+    titan_v3: { name: '⚡ TITAN v3',     desc: '3-loss recovery flip, else ORACLE fallback', tags: ['TITAN', 'Recovery'] },
+    dna3:     { name: '🧬 DNA 3',        desc: '3-result triplet pattern lookup table, else ZigZag fallback', tags: ['DNA', 'Pattern'] },
+    FHaa:     { name: '🔁 FHaa (GRR Loop)', desc: 'GREEN → RED → RED → repeat loop. Level 8 (7+ losses) → OPPOSITE prediction', tags: ['GRR', 'Loop', 'Level8-Flip'] },
   };
-  /* Every existing formula is a 30S engine. 1-minute formulas (added later)
-     must carry mode:'WinGo_1M'. Default any untagged formula to 30S. */
-  Object.keys(FORMULAS).forEach(function(k){ if (!FORMULAS[k].mode) FORMULAS[k].mode = 'WinGo_30S'; });
-  var currentGameMode = 'WinGo_30S';   // tracks the active account's mode
 
   /* ═══ DOM Refs ═══ */
   var $ = function(id) { return document.getElementById(id); };
@@ -588,17 +542,9 @@
   function lockPhoneField() {
     var el = document.getElementById('abPhone');
     if (!el) return; // DOM not ready yet
-    var bp = sessionStorage.getItem('kp_bound_phone') || kpBoundPhone;
-    if (!kpGetIsDefault() && bp) {
-      el.value    = bp;
-      el.readOnly = true;
-      el.style.opacity = '0.7';
-      el.title = 'This key is registered to ' + bp;
-    } else {
-      el.readOnly = false;
-      el.style.opacity = '';
-      el.title = '';
-    }
+    el.readOnly = false;
+    el.style.opacity = '';
+    el.title = '';
   }
   lockPhoneField();
 
@@ -659,15 +605,6 @@
       reAuthAll();
     });
 
-    /* ── Server rejected the access key (deleted / disabled / wrong number) ── */
-    socket.on('authError', function(e) {
-      try { alert('Access denied: ' + ((e && e.msg) || 'Invalid access key')); } catch(_) {}
-      sessionStorage.removeItem('kp_key_valid');
-      sessionStorage.removeItem('kp_key');
-      sessionStorage.removeItem('kp_session_id');
-      location.reload();
-    });
-
     /* ── Full state snapshot (for current view) ── */
     socket.on('state', function(s) {
       // Only render if this state is for our current view
@@ -683,7 +620,7 @@
 
     /* ── Account list updates ── */
     socket.on('accountList', function(list) {
-      renderAccountList(list);
+      renderAccountTabs(list);
     });
 
     /* ── Account removed ── */
@@ -778,7 +715,6 @@
         webapiToken: a.webapiToken,
         phone: a.phone,
         pwd: a.pwd || '',
-        key: sessionStorage.getItem('kp_key') || '',
       });
     });
     // Switch to current view
@@ -789,37 +725,29 @@
     }
   }
 
-  /* ═══ Account List (button + popup) ═══ */
-  var _acctList = [];
-  function renderAccountList(list) {
-    _acctList = list || [];
+  /* ═══ Account Tabs ═══ */
+  function renderAccountTabs(list) {
+    var tabs = $('abAcctTabs');
+    tabs.innerHTML = '';
+    (list || []).forEach(function(a) {
+      var tab = document.createElement('div');
+      tab.className = 'kp-acct-tab' + (a.phone === currentView ? ' active' : '');
+      tab.setAttribute('data-phone', a.phone);
 
-    /* Button: show the CURRENT account's FULL mobile number + total count */
-    var cur = _acctList.filter(function(a){ return a.phone === currentView; })[0];
-    var lbl = $('abAcctCurLabel'); if (lbl) lbl.textContent = cur ? cur.phone : (currentView || 'No account');
-    var cnt = $('abAcctCount');    if (cnt) cnt.textContent = _acctList.length;
-    var mc  = $('abAcctModalCount'); if (mc) mc.textContent = '(' + _acctList.length + ')';
-
-    /* Popup list: one row per account, FULL number, switchable */
-    var box = $('abAcctModalList'); if (!box) return;
-    box.innerHTML = '';
-    _acctList.forEach(function(a) {
-      var row = document.createElement('div');
-      row.className = 'kp-acct-row' + (a.phone === currentView ? ' active' : '');
-      row.setAttribute('data-phone', a.phone);
+      var phoneLast4 = a.phone.length > 4 ? '...' + a.phone.slice(-4) : a.phone;
       var statusCls = 'pill-' + (a.engine || 'stopped');
-      row.innerHTML = '<span class="kp-acct-row-check">' + (a.phone === currentView ? '✓' : '') + '</span>'
-        + '<span class="kp-acct-row-phone">' + a.phone + '</span>'
-        + '<span class="kp-acct-row-status ' + statusCls + '">' + (a.engine || 'stopped').toUpperCase() + '</span>'
-        + '<span class="kp-acct-row-bal">₹' + (a.balance || 0).toFixed(0) + '</span>'
-        + '<span class="kp-acct-row-pnl ' + ((a.pnl || 0) >= 0 ? 'vg' : 'vr') + '">' + formatPnl(a.pnl || 0) + '</span>';
-      row.addEventListener('click', function() { switchToAccount(a.phone); closeAcctModal(); });
-      box.appendChild(row);
+
+      tab.innerHTML = '<span class="kp-acct-phone">' + phoneLast4 + '</span>'
+        + '<span class="kp-acct-status ' + statusCls + '">' + (a.engine || 'stopped').toUpperCase() + '</span>'
+        + '<span class="kp-acct-bal">₹' + (a.balance || 0).toFixed(0) + '</span>'
+        + '<span class="kp-acct-pnl ' + ((a.pnl || 0) >= 0 ? 'vg' : 'vr') + '">' + formatPnl(a.pnl || 0) + '</span>';
+
+      tab.addEventListener('click', function() {
+        switchToAccount(a.phone);
+      });
+      tabs.appendChild(tab);
     });
   }
-
-  function openAcctModal()  { var m = $('abAcctModal'); if (m) m.classList.add('open'); }
-  function closeAcctModal() { var m = $('abAcctModal'); if (m) m.classList.remove('open'); }
 
   function switchToAccount(phone) {
     if (currentView === phone) return;
@@ -827,7 +755,11 @@
     saveAccounts();
     betRecordLoaded = false;
     if (socket) socket.emit('switchView', { phone: phone });
-    renderAccountList(_acctList);   // refresh button label + row highlight
+    // Update tab active states
+    var allTabs = document.querySelectorAll('.kp-acct-tab');
+    allTabs.forEach(function(t) {
+      t.classList.toggle('active', t.getAttribute('data-phone') === phone);
+    });
   }
 
   /* ═══ Render Full State ═══ */
@@ -861,32 +793,6 @@
     pnlEl.textContent = formatPnl(s.pnl || 0);
     pnlEl.className = 'kp-ms-v ab-stat-val ' + ((s.pnl || 0) >= 0 ? 'vg' : 'vr');
     kpLastPnl = s.pnl || 0;
-
-    /* Capture real balance from first state event.
-       If sessionId isn't ready yet (bind still in-flight), park it in
-       kpPendingBalance — the bind callback will send it when it arrives. */
-    if (!kpBalanceSaved && (s.balance || 0) > 0) {
-      kpPendingBalance = s.balance;
-      if (kpSessionId) {
-        kpBalanceSaved = true;
-        fetch('/api/keys/session/balance', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId: kpSessionId, balance: s.balance })
-        }).catch(function(){});
-      }
-    }
-
-    /* Auto-stop detection: engine just changed from running → stopped without user click */
-    if (s.engine === 'stopped' && kpSessionId && !window._kpStopSent) {
-      window._kpStopSent = true;
-      fetch('/api/keys/session/stop', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: kpSessionId, profit: kpLastPnl })
-      }).catch(function(){});
-    }
-    if (s.engine !== 'stopped') { window._kpStopSent = false; }
     $('abLvl').textContent = 'LV' + (s.level || 1);
     $('abHighLvl').textContent = 'LV' + (s.highestLevel || 1);
     if (s.sessionElapsed) {
@@ -901,6 +807,20 @@
       predEl.textContent = pred;
       predEl.className = 'ab-hero-pred pred-' + pred.toLowerCase();
       $('abPeriod').textContent = s.prediction.forIssue ? '...' + s.prediction.forIssue.slice(-5) : '—';
+
+      // Confidence bar
+      var conf = s.prediction.conf || 0;
+      if (conf > 0) {
+        $('abConfRow').style.display = 'flex';
+        var level = conf >= 80 ? 'high' : conf >= 65 ? 'mid' : 'low';
+        $('abConfFill').style.width = conf + '%';
+        $('abConfFill').className = 'kp-conf-fill ' + level;
+        $('abConfPct').textContent = conf + '%';
+        $('abConfPct').className = 'kp-conf-pct ' + level;
+      } else {
+        $('abConfRow').style.display = 'none';
+      }
+
       var subsEl = $('abHeroSubs');
       subsEl.innerHTML = '';
       var rawLog = s.prediction.log || '';
@@ -919,21 +839,13 @@
         fc.textContent = s.prediction.formula || s.formula || '—';
         subsEl.appendChild(fc);
       }
+    } else {
+      $('abConfRow').style.display = 'none';
+      $('abPred').textContent = 'WAIT';
+      $('abPred').className = 'ab-hero-pred pred-wait';
     }
 
     // Config
-    if (s.gameMode) {
-      currentGameMode = s.gameMode;
-      var mt = $('abModeToggle');
-      if (mt) {
-        mt.querySelectorAll('.kp-mode-btn').forEach(function(b){
-          b.classList.toggle('active', b.getAttribute('data-mode') === s.gameMode);
-        });
-      }
-      // Lock mode toggle while engine is running (can't switch mid-run)
-      var running = s.engine && s.engine !== 'stopped';
-      if (mt) mt.querySelectorAll('.kp-mode-btn').forEach(function(b){ b.disabled = !!running; });
-    }
     if (s.formulaInfo) {
       $('abFormulaName').textContent = s.formulaInfo.name || s.formula || '—';
     }
@@ -1132,28 +1044,6 @@
     }
   }
 
-  function renderFormulaGrid(currentFormula) {
-    var grid = $('abFormulaGrid');
-    grid.innerHTML = '';
-    var keys = Object.keys(FORMULAS).filter(function(k){ return (FORMULAS[k].mode || 'WinGo_30S') === currentGameMode; });
-    if (keys.length === 0) {
-      grid.innerHTML = '<div class="kp-empty" style="padding:24px;text-align:center;color:#888">No formulas for this mode yet.</div>';
-      return;
-    }
-    keys.forEach(function(key) {
-      var f = FORMULAS[key];
-      var card = document.createElement('div');
-      card.className = 'ab-formula-card' + (key === currentFormula ? ' selected' : '');
-      card.innerHTML = '<div class="ab-fc-name">' + f.name + '</div>'
-        + '<div class="ab-fc-desc">' + f.desc + '</div>'
-        + '<div class="ab-fc-tags">' + f.tags.map(function(t) { return '<span class="ab-fc-tag">' + t + '</span>'; }).join('') + '</div>';
-      card.onclick = function() {
-        socket.emit('setFormula', { phone: currentView, formula: key });
-        $('abFormulaPopup').style.display = 'none';
-      };
-      grid.appendChild(card);
-    });
-  }
 
   function renderBetRecord(d) {
     var list = $('abBetRecordList');
@@ -1216,25 +1106,6 @@
   async function handleCaptcha() {
     var phone = phoneEl.value.trim().replace(/[^0-9]/g,'');
     if (!phone) { status('❌ Enter your phone number first', false); return; }
-
-    /* Check key→phone binding before fetching captcha */
-    if (kpKey) {
-      try {
-        var vr = await fetch('/api/keys/validate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key: kpKey, phone: phone })
-        });
-        var vd = await vr.json();
-        if (!vd.ok) {
-          status('❌ ' + (vd.msg || 'Key validation failed'), false);
-          return;
-        }
-      } catch(e) {
-        status('❌ Key check failed: ' + e.message, false);
-        return;
-      }
-    }
 
     captchaBtn.disabled = true;
     captchaBtn.textContent = 'Loading...';
@@ -1319,33 +1190,10 @@
       return;
     }
 
-    status('⏳ Verifying key...', true);
+    status('⏳ Logging in...', true);
     loginBtn.disabled = true;
 
     try {
-      /* ── Hard server-side gate: key+phone binding check ──
-         Always read kp_key fresh from sessionStorage — the JS variable
-         kpKey may be stale if the gate ran after the IIFE initialized. */
-      var activeKey = sessionStorage.getItem('kp_key') || kpKey;
-      var cleaned0  = phone.replace(/[^0-9]/g, '');
-      if (!activeKey) {
-        status('❌ No license key found — please refresh and enter your key', false);
-        loginBtn.disabled = false;
-        return;
-      }
-      var kc = await fetch('/api/keys/login-check', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key: activeKey, phone: cleaned0 })
-      });
-      var kd = await kc.json();
-      if (!kd.ok) {
-        status('❌ ' + (kd.msg || 'Access denied'), false);
-        loginBtn.disabled = false;
-        return;
-      }
-
-      status('⏳ Logging in...', true);
       var cleaned  = phone.replace(/[^0-9]/g, '');
       var username = cleaned.length <= 10 ? '91' + cleaned : cleaned;
 
@@ -1383,51 +1231,11 @@
           pwd: pwd,
         };
 
-        /* Regular key users: enforce single account — replace any existing */
+        /* Non-PRO devices: enforce single account — replace any existing */
         if (!kpIsDefault) accounts = [];
         accounts.push(acctEntry);
         currentView = phone;
         saveAccounts();
-
-        /* Bind key → phone and create session row (balance captured later from state event) */
-        var activeKey = sessionStorage.getItem('kp_key') || kpKey;
-        if (activeKey) {
-          kpBalanceSaved = false;
-          fetch('/api/keys/bind', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ key: activeKey, phone: phone })
-          })
-          .then(function(r){ return r.json(); })
-          .then(function(bd){
-            if (bd.ok && bd.sessionId) {
-              kpSessionId = bd.sessionId;
-              sessionStorage.setItem('kp_session_id', kpSessionId);
-              window._kpStopSent = false;
-
-              /* Update kpKey from sessionStorage in case it was stale */
-              kpKey = sessionStorage.getItem('kp_key') || kpKey;
-
-              /* Lock phone field from now on for this key */
-              if (!kpIsDefault && !kpBoundPhone) {
-                kpBoundPhone = phone;
-                sessionStorage.setItem('kp_bound_phone', phone);
-                lockPhoneField();
-              }
-
-              /* State event may have already arrived with balance — flush it now */
-              if (!kpBalanceSaved && kpPendingBalance > 0) {
-                kpBalanceSaved = true;
-                fetch('/api/keys/session/balance', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ sessionId: kpSessionId, balance: kpPendingBalance })
-                }).catch(function(){});
-              }
-            }
-          })
-          .catch(function(){});
-        }
 
         status('✅ Login success!', true);
         toast('Logged In', 'Welcome ' + phone, 'info');
@@ -1452,19 +1260,11 @@
 
   /* ═══ Dashboard Event Listeners ═══ */
 
-  // Account list popup (open / close / overlay-click)
-  var _acctListBtn = $('abBtnAcctList');
-  if (_acctListBtn) _acctListBtn.addEventListener('click', openAcctModal);
-  var _acctModalClose = $('abAcctModalClose');
-  if (_acctModalClose) _acctModalClose.addEventListener('click', closeAcctModal);
-  var _acctModal = $('abAcctModal');
-  if (_acctModal) _acctModal.addEventListener('click', function(e) { if (e.target === _acctModal) closeAcctModal(); });
-
   // Add Account
   var _addAcctBtn = $('abBtnAddAcct');
   if (_addAcctBtn) {
     _addAcctBtn.addEventListener('click', function() {
-      if (sessionStorage.getItem('kp_is_default') !== '1') return;
+      if (!kpGetIsDefault()) return;
       showLogin();
     });
   }
@@ -1481,18 +1281,15 @@
     accounts = accounts.filter(function(a) { return a.phone !== currentView; });
 
     if (kpIsDefault && accounts.length > 0) {
-      /* Super user: switch to next available account */
+      /* PRO device: switch to next available account */
       currentView = accounts[0].phone;
       saveAccounts();
       socket.emit('switchView', { phone: currentView });
     } else {
-      /* Regular user (or last account): back to login, key stays valid */
+      /* Regular device (or last account): back to login */
       currentView = null;
       accounts = [];
       saveAccounts();
-      kpSessionId = '';
-      kpBalanceSaved = false;
-      sessionStorage.removeItem('kp_session_id');
       if (socket) { socket.disconnect(); socket = null; }
       showLogin();
     }
@@ -1502,15 +1299,13 @@
   // Start
   $('abBtnStart').addEventListener('click', function(){
     if (!socket || !currentView) return;
-    window._kpStopSent = false;
-    socket.emit('start', { phone: currentView, sessionId: kpSessionId || null });
+    socket.emit('start', { phone: currentView });
   });
 
   // Stop
   $('abBtnStop').addEventListener('click', function(){
     if (!socket || !currentView) return;
-    window._kpStopSent = true; // mark as user-initiated, suppress auto-stop handler
-    socket.emit('stop', { phone: currentView, sessionId: kpSessionId || null, profit: kpLastPnl });
+    socket.emit('stop', { phone: currentView, profit: kpLastPnl });
   });
 
   // Reset Stats
@@ -1562,31 +1357,7 @@
     }
   });
 
-  // Formula Popup
-  $('abBtnFormulaPopup').addEventListener('click', function(e) {
-    e.stopPropagation();
-    renderFormulaGrid($('abFormulaName').textContent);
-    $('abFormulaPopup').style.display = '';
-  });
-  $('abFormulaActive').addEventListener('click', function() {
-    renderFormulaGrid($('abFormulaName').textContent);
-    $('abFormulaPopup').style.display = '';
-  });
-  $('abBtnFormulaClose').addEventListener('click', function(){
-    $('abFormulaPopup').style.display = 'none';
-  });
-
-  // Game mode toggle (30S ↔ 1M) — per account
-  function setGameMode(mode) {
-    if (!currentView) { return; }
-    if (mode === currentGameMode) return;
-    socket.emit('setGameMode', { phone: currentView, gameMode: mode });
-    // optimistic UI; server confirms via 'state'
-  }
-  window.setGameMode = setGameMode;
-  $('abFormulaPopup').addEventListener('click', function(e){
-    if (e.target === this) this.style.display = 'none';
-  });
+  // Formula is fixed to Shadow Adaptive Engine v14.0 — no popup needed
 
   // Bet History Pagination
   $('abBetHistPrev').addEventListener('click', function(){
@@ -1917,6 +1688,27 @@
 
 })();
 </script>
+<!-- ═══ FIREBASE ADMIN HELPERS ═══ -->
+<script>
+  // Copy device ID to clipboard
+  function copyDeviceId() {
+    var id = window.KP_DEVICE_ID || localStorage.getItem('KP_device_id') || 'Unknown';
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(id).then(function() {
+        alert('Device ID Copied!\n\nID: ' + id);
+      }).catch(function() {
+        prompt('Your Device ID:', id);
+      });
+    } else {
+      prompt('Your Device ID:', id);
+    }
+  }
 
-</body>
+  // Open the real GOKU MODS Admin Panel (same Firebase project/database)
+  function openAdminPanel() {
+    window.open('/admin.html', '_blank');
+  }
+</script>
+
+<script src="https://replit-cdn.com/replit-pill/replit-pill.global.js" data-repl-id="54ce0cac-2f71-4346-8c9b-c94692e48c21"></script></body>
 </html>
