@@ -519,13 +519,11 @@
 
   /* ═══ Formula — Shadow Adaptive Engine v14.0 (fixed) ═══ */
   var FORMULAS = {
-    kingpin3: { name: '👑 KINGPIN 3.0',  desc: 'Last 2 numbers → 4 modular candidate formulas, majority BIG/SMALL vote (tie→BIG)', tags: ['KINGPIN', 'Modular', '4-Vote'] },
-    zigzag:   { name: '⚡ ZigZag',       desc: 'Pure BIG↔SMALL toggle — opposite of last result, flips every period', tags: ['ZigZag', 'Toggle'] },
-    oracle:   { name: '🔮 ORACLE',       desc: 'Last-10 mean reversion: ratio>65% BIG→SMALL, ratio<35%→BIG, else ZigZag', tags: ['Adaptive', 'Mean-Reversion'] },
-    kaala:    { name: '🕶️ Kaala',        desc: 'Streak detector (last 18): 4+ same → reverse, else ORACLE fallback', tags: ['Kaala', 'Streak'] },
-    titan_v3: { name: '⚡ TITAN v3',     desc: '3-loss recovery flip, else ORACLE fallback', tags: ['TITAN', 'Recovery'] },
-    dna3:     { name: '🧬 DNA 3',        desc: '3-result triplet pattern lookup table, else ZigZag fallback', tags: ['DNA', 'Pattern'] },
-    FHaa:     { name: '🔁 FHaa (GRR Loop)', desc: 'GREEN → RED → RED → repeat loop. Level 8 (7+ losses) → OPPOSITE prediction', tags: ['GRR', 'Loop', 'Level8-Flip'] },
+    shadow: {
+      name: '⚡ Shadow Adaptive v14.0',
+      desc: '8-strategy voting engine: Anti-Streak · Zigzag · FreqBias · DblPair · Mirror · Momentum · Triple · Trend30 + L1/L2 Level-Fix override. Confidence-gated (≥63%, ≥72% after 2L).',
+      tags: ['Shadow', '8-Strategy', 'Level-Fix', 'Adaptive']
+    },
   };
 
   /* ═══ DOM Refs ═══ */
