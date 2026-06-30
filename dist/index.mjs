@@ -54271,7 +54271,7 @@ function snap(acct) {
     highestLevel: acct.highestLevel,
     sessionElapsed: Date.now() - acct.sessionStart,
     prediction: acct.lastPrediction ? {
-      pred: acct.lastPrediction === "B" ? "GREEN" : "RED",
+      pred: colorLabel(acct.lastPrediction),
       conf: acct.lastConf,
       forIssue: acct.currentPeriod ?? "",
       log: "",
@@ -54356,16 +54356,24 @@ async function fetchCurrentPeriod(acct) {
   }
   return null;
 }
+function numberToColor(n) {
+  if (n === 0) return "RV";
+  if (n === 5) return "GV";
+  if ([1, 3, 7, 9].includes(n)) return "G";
+  if ([2, 4, 6, 8].includes(n)) return "R";
+  return "G";
+}
 function parseResultList(list) {
   return list.map((item) => {
     const numStr = String(item["number"] ?? item["num"] ?? item["openNumber"] ?? item["winNumber"] ?? "");
     if (numStr !== "" && numStr !== "undefined" && !isNaN(parseInt(numStr))) {
-      return parseInt(numStr) >= 5 ? "B" : "S";
+      return numberToColor(parseInt(numStr));
     }
     const colour = String(item["colour"] ?? item["color"] ?? item["result"] ?? "").toLowerCase();
-    if (colour.includes("big")) return "B";
-    if (colour.includes("small")) return "S";
-    return "B";
+    if (colour.includes("violet") || colour.includes("purple")) return colour.includes("green") ? "GV" : "RV";
+    if (colour.includes("green")) return "G";
+    if (colour.includes("red")) return "R";
+    return "G";
   });
 }
 async function fetchResultsPublic(size = 50) {
@@ -54402,12 +54410,14 @@ async function fetchLastResults(acct, size = 50) {
 async function placeBet(acct, pred, amt, period) {
   try {
     const token = acct.lotteryToken || acct.webapiToken;
+    const betContentMap = { G: "Green", R: "Red", GV: "Green", RV: "Red" };
     const r = await goaPost2("/WinGo/WinGoBet", {
       typeId: TYPE_ID,
       issueNumber: period,
       amount: amt,
-      betContent: pred === "B" ? "Big" : "Small",
+      betContent: betContentMap[pred] || "Green",
       multiple: 1
+
     }, token);
     return r["code"] === 0;
   } catch (_) {
@@ -54423,8 +54433,8 @@ async function checkBetResult(acct, period) {
       const row = list.find((i) => String(i["issueNumber"] ?? i["issue"]) === period);
       if (row) {
         const num = parseInt(String(row["number"] ?? row["num"] ?? 0));
-        const result = num >= 5 ? "B" : "S";
-        const win = result === acct.lastPrediction;
+        const result = numberToColor(num);
+        const win = colorsMatch(acct.lastPrediction, result);
         const amt = acct.levels[acct.currentLevel - 1] ?? acct.config.baseAmt;
         return { result, win, pnl: win ? +(amt * 0.95).toFixed(2) : -amt };
       }
@@ -54435,13 +54445,25 @@ async function checkBetResult(acct, period) {
 }
 var GRR_LOOP = ["GREEN", "RED", "RED"];
 var grrLoopIndex = 0;
-function colorToBS(color) { return color === "GREEN" ? "B" : "S"; }
+function colorLabel(code) {
+  if (code === "GV") return "GREEN-VIOLET";
+  if (code === "RV") return "RED-VIOLET";
+  if (code === "G") return "GREEN";
+  if (code === "R") return "RED";
+  return code === "B" ? "GREEN" : "RED";
+}
+function colorsMatch(pred, actual) {
+  if (pred === actual) return true;
+  if (pred === "G" && (actual === "GV")) return true;
+  if (pred === "R" && (actual === "RV")) return true;
+  return false;
+}
 function predict(_formula, history, consecLosses = 0) {
   const pos = grrLoopIndex % 3;
   let finalColor = GRR_LOOP[pos];
   const isOpposite = consecLosses >= 7;
   if (isOpposite) finalColor = finalColor === "GREEN" ? "RED" : "GREEN";
-  const pred = colorToBS(finalColor);
+  const pred = finalColor === "GREEN" ? "G" : "R";
   const loopStr = GRR_LOOP.map((l, i) => i === pos ? `[${l}]` : l).join(" \u2192 ");
   const reason = `GRR Loop Step ${pos + 1}/3: ${loopStr}${isOpposite ? ` \u2192 OPPOSITE(LV8): ${finalColor}` : ""}`;
   grrLoopIndex++;
@@ -54463,7 +54485,7 @@ function setupSocketHandlers(io3) {
         const initRes = predict(acct.config.formula, initHistory, acct.losses);
         acct.lastConf = initRes.conf;
         acct.lastPrediction = initRes.pred;
-        const predLabel0 = initRes.pred === "B" ? "GREEN" : "RED";
+        const predLabel0 = colorLabel(initRes.pred);
         addLog(acct, "info", `\u{1F52E} Initial \u2014 ${predLabel0} | ${initRes.reason}`);
       } catch (_) {}
       startPolling(io3, acct);
@@ -54655,8 +54677,8 @@ function startPolling(io3, acct) {
         if (rd) {
           const { result, win, pnl } = rd;
           acct.lastResult = result;
-          const predLabel = acct.lastPrediction === "B" ? "GREEN" : "RED";
-          const resLabel = result === "B" ? "GREEN" : "RED";
+          const predLabel = colorLabel(acct.lastPrediction);
+          const resLabel = colorLabel(result);
           const amt = acct.levels[acct.currentLevel - 1] ?? acct.config.baseAmt;
           if (win) {
             acct.wins++;
@@ -54708,7 +54730,7 @@ function startPolling(io3, acct) {
             });
           } else {
             acct.lastPrediction = pred;
-            const predLabel = pred === "B" ? "GREEN" : "RED";
+            const predLabel = colorLabel(pred);
             const log = addLog(acct, "info", `\u{1F52E} Period ${period} \u2014 ${predLabel} | ${reason}`);
             broadcast(io3, acct.phone, "log", log);
           }
@@ -54732,7 +54754,7 @@ function startPolling(io3, acct) {
         }
         if (!acct.config.watchEnabled || !acct.watchActive) {
           const amt = acct.levels[acct.currentLevel - 1] ?? acct.config.baseAmt;
-          const predLabel = acct.lastPrediction === "B" ? "GREEN" : "RED";
+          const predLabel = colorLabel(acct.lastPrediction);
           broadcast(io3, acct.phone, "betStatus", {
             cls: "betting",
             icon: "\u{1F3B0}",
