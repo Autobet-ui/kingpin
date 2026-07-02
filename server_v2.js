@@ -66,81 +66,94 @@ async function goaPost(endpoint, payload, token) {
 async function getCaptcha()      { return goaPost('/Captcha',{}); }
 async function loginGoa(payload) { return goaPost('/Login', payload); }
 
-// Balance — tries 3 endpoints
+// ══════════════════════════════════════
+//  BALANCE — Fixed: tries multiple endpoints & fields
+// ══════════════════════════════════════
 async function getBalance(token) {
-  var endpoints = ['/Member/GetUserInfo', '/User/GetUserInfo', '/User/GetInfo'];
+  if(!token) return 0;
+  const endpoints = [
+    '/Member/GetUserInfo',
+    '/User/GetUserInfo',
+    '/User/GetInfo',
+    '/Member/UserInfo',
+  ];
   for(var ep of endpoints) {
     try {
       var r = await goaPost(ep, {}, token);
       if(r && r.code===0 && r.data) {
         var d = r.data;
+        // Extract all possible balance fields
         var cands = [
           d.money, d.balance, d.wallet, d.mainBalance,
           d.normalBalance, d.rechargeBalance, d.totalBalance,
-          d.coinBalance, d.amount,
+          d.coinBalance, d.amount, d.availableBalance,
           d.userInfo && d.userInfo.money,
           d.userInfo && d.userInfo.balance,
+          d.userInfo && d.userInfo.wallet,
         ].map(v=>parseFloat(v||0)).filter(n=>!isNaN(n)&&n>=0);
         if(cands.length>0) return Math.max(...cands);
       }
-    } catch(e) {}
+    } catch(e) { /* try next */ }
   }
   return 0;
 }
 
-// Public WinGo history (no auth needed)
-const PUB_URL = 'https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json';
+// ══════════════════════════════════════
+//  PUBLIC WINGO HISTORY — Multi-mode support
+// ══════════════════════════════════════
+const PUB_URLS = [
+  'https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json',
+  'https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json',
+];
 
-async function fetchPublicList(size) {
-  try {
-    var r = await axios.get(PUB_URL+'?pageNo=1&pageSize='+(size||50)+'&gameId=1',{
-      headers:{'Accept':'application/json','User-Agent':BYPASS_HEADERS['User-Agent']},
-      timeout:8000,
-    });
-    var data = r.data && (r.data.data||r.data);
-    var list = (data&&(data.list||data.issueList||data.data))||(r.data&&r.data.list)||[];
-    if(Array.isArray(list)&&list.length>0) return list;
-  } catch(e) {}
+async function fetchPublicList(size, modeUrl) {
+  var urls = modeUrl ? [modeUrl] : PUB_URLS;
+  for(var url of urls) {
+    try {
+      var r = await axios.get(url+'?pageNo=1&pageSize='+(size||100)+'&gameId=1&t='+Date.now(),{
+        headers:{'Accept':'application/json','User-Agent':BYPASS_HEADERS['User-Agent']},
+        timeout:10000,
+      });
+      var data = r.data && (r.data.data||r.data);
+      var list = (data&&(data.list||data.issueList||data.data))||(r.data&&r.data.list)||[];
+      if(Array.isArray(list)&&list.length>0) return list;
+    } catch(e) { /* try next */ }
+  }
   return [];
 }
 
-// Current issue
-async function getCurrentIssue(token) {
-  // Public source (most reliable)
-  var list = await fetchPublicList(1);
+// ══════════════════════════════════════
+//  CURRENT ISSUE — Fixed
+// ══════════════════════════════════════
+async function getCurrentIssue(token, modeUrl) {
+  // Primary: public source (most reliable, no auth needed)
+  var list = await fetchPublicList(1, modeUrl);
   if(list.length>0) {
     var last = String(list[0].issueNumber||list[0].issue||'');
     if(last&&/^\d+$/.test(last)) {
       var next = String(BigInt(last)+1n);
-      var secs = Math.floor(Date.now()/1000)%30;
-      return { issueNumber:next, remainTime:30-secs };
+      // Calculate real countdown from period number
+      var periodLen = 30; // default 30s
+      var epochSec = Math.floor(Date.now()/1000);
+      var rem = periodLen - (epochSec % periodLen);
+      return { issueNumber:next, remainTime:rem };
     }
   }
   // GOA fallback
   try {
     var r = await goaPost('/WinGo/GetCurrentIssue',{typeId:TYPE_ID},token);
-    if(r&&r.code===0&&r.data) return {
-      issueNumber: String(r.data.issueNumber||r.data.issue||''),
-      remainTime: Number(r.data.countdown||r.data.remainTime||r.data.endTime||30),
-    };
-  } catch(e) {}
-  try {
-    var r2 = await goaPost('/WinGo/GetIssueList',{pageNo:1,pageSize:1,typeId:TYPE_ID},token);
-    if(r2&&r2.code===0&&r2.data&&r2.data.list&&r2.data.list[0]) {
-      var item=r2.data.list[0];
-      var last2=String(item.issueNumber||item.issue||'');
-      if(last2&&/^\d+$/.test(last2)) {
-        var next2=String(BigInt(last2)+1n);
-        var secs2=Math.floor(Date.now()/1000)%30;
-        return {issueNumber:next2, remainTime:30-secs2};
-      }
+    if(r&&r.code===0&&r.data) {
+      return {
+        issueNumber: String(r.data.issueNumber||r.data.issue||''),
+        remainTime: Number(r.data.countdown||r.data.remainTime||r.data.endTime||30),
+      };
     }
   } catch(e) {}
   return null;
 }
 
-async function getLastResult(token) {
-  var list = await fetchPublicList(1);
+async function getLastResult(token, modeUrl) {
+  var list = await fetchPublicList(1, modeUrl);
   if(list.length>0) return list[0];
   try {
     var r = await goaPost('/WinGo/GetIssueList',{pageNo:1,pageSize:1,typeId:TYPE_ID},token);
@@ -149,17 +162,17 @@ async function getLastResult(token) {
   return null;
 }
 
-async function getHistory(token, size) {
-  var list = await fetchPublicList(size||50);
+async function getHistory(token, size, modeUrl) {
+  var list = await fetchPublicList(size||100, modeUrl);
   if(list.length>=6) return list;
   try {
-    var r = await goaPost('/WinGo/GetIssueList',{pageNo:1,pageSize:size||50,typeId:TYPE_ID},token);
+    var r = await goaPost('/WinGo/GetIssueList',{pageNo:1,pageSize:size||100,typeId:TYPE_ID},token);
     if(r&&r.code===0&&r.data&&r.data.list) return r.data.list;
   } catch(e) {}
   return list;
 }
 
-// Place bet (correct GOA format)
+// Place bet
 async function placeBet(token, issueNumber, predBS, amount) {
   var r = await goaPost('/WinGo/WinGoBet', {
     typeId      : TYPE_ID,
@@ -176,10 +189,9 @@ async function getBetRecord(token, page) {
 }
 
 // ══════════════════════════════════════
-//  PREDICTION FORMULAS
+//  PREDICTION FORMULAS (ALL 15)
 // ══════════════════════════════════════
 
-// Helper: convert raw list → B/S array (recent first)
 function toBS(rawList) {
   return rawList.map(item=>{
     var n=parseInt(String(item.number||item.num||'0'));
@@ -187,11 +199,10 @@ function toBS(rawList) {
   });
 }
 
-// 1. Shadow Adaptive Engine v14.0
 var MIN_CONF=63, MIN_CONF_LOSS=72;
 function shadowEngine(rawList, consecLosses) {
   var seq=toBS(rawList);
-  if(seq.length<6) return {pred:'BIG',conf:50,reason:'Collecting data…',skip:true};
+  if(seq.length<6) return {pred:'BIG',conf:55,reason:'Collecting data…',skip:false};
   var streak=1;
   for(var i=1;i<seq.length;i++){if(seq[i]===seq[0])streak++;else break;}
   var opp=seq[0]==='B'?'SMALL':'BIG';
@@ -217,7 +228,7 @@ function shadowEngine(rawList, consecLosses) {
   if(seq.length>=3&&seq[0]===seq[1]&&seq[1]===seq[2]) vote(oS,20,'Triple');
   if(seq.length>=30){var L30=seq.slice(0,30);var b30=L30.filter(x=>x==='B').length,s30=L30.length-b30;if(b30>=19)vote('SMALL',10,'Trend30');else if(s30>=19)vote('BIG',10,'Trend30');}
   var total=V.BIG+V.SMALL;
-  if(!total) return {pred:'BIG',conf:50,reason:'No signal',skip:true};
+  if(!total) return {pred:'BIG',conf:55,reason:'No signal',skip:false};
   var pF=V.BIG>V.SMALL?'BIG':'SMALL';
   var rawC=(V[pF]/total)*100, margin=Math.abs(V.BIG-V.SMALL);
   var conf=Math.min(95,Math.max(50,rawC+Math.min(margin*0.3,8)));
@@ -226,23 +237,19 @@ function shadowEngine(rawList, consecLosses) {
   return {pred:pF,conf,reason:'Shadow['+conf+'%] BIG='+V.BIG+' SMALL='+V.SMALL+' | '+R.slice(0,4).join(' | '),skip:conf<thr};
 }
 
-// 2. FHaa — GRR Loop (GREEN→RED→RED repeat)
 var GRR=['BIG','SMALL','SMALL']; var grrIdx=0;
 function formulaFHaa(rawList, level) {
   var pos=grrIdx%3; var pred=GRR[pos];
-  if(level>=8) pred=pred==='BIG'?'SMALL':'BIG'; // flip at level 8
+  if(level>=8) pred=pred==='BIG'?'SMALL':'BIG';
   grrIdx++;
   return {pred,conf:75,reason:'FHaa-GRR pos='+(pos+1)+'/3'+(level>=8?' [L8-FLIP]':''),skip:false};
 }
 
-// 3. EIP — Even/Odd + Interval Pattern
 function formulaEIP(rawList) {
   var seq=toBS(rawList);
   if(seq.length<4) return {pred:'BIG',conf:55,reason:'EIP: collecting',skip:false};
-  // Count intervals between same outcomes
   var bigPos=[],smallPos=[];
   seq.slice(0,20).forEach((v,i)=>{if(v==='B')bigPos.push(i);else smallPos.push(i);});
-  // Interval analysis
   function avgInterval(pos){
     if(pos.length<2) return 2;
     var sum=0;for(var i=1;i<pos.length;i++)sum+=pos[i]-pos[i-1];
@@ -250,23 +257,19 @@ function formulaEIP(rawList) {
   }
   var bigAvg=avgInterval(bigPos), smallAvg=avgInterval(smallPos);
   var lastBig=bigPos[0]||999, lastSmall=smallPos[0]||999;
-  // If last BIG was long ago relative to its avg interval → BIG due
   var bigDue=(lastBig/bigAvg), smallDue=(lastSmall/smallAvg);
   var pred=bigDue>=smallDue?'BIG':'SMALL';
   var conf=Math.min(85,55+Math.abs(bigDue-smallDue)*10);
   return {pred,conf:Math.round(conf),reason:'EIP: bigDue='+bigDue.toFixed(2)+' smallDue='+smallDue.toFixed(2),skip:conf<55};
 }
 
-// 4. Zigzag
 function formulaZigzag(rawList) {
   var seq=toBS(rawList);
   if(!seq.length) return {pred:'BIG',conf:60,reason:'Zigzag: default',skip:false};
-  var pred=seq[0]==='BIG'?'SMALL':'BIG'; // actually seq[0] is B or S
   var realPred=seq[0]==='B'?'SMALL':'BIG';
   return {pred:realPred,conf:62,reason:'Zigzag: flip from '+seq[0],skip:false};
 }
 
-// 5. Oracle — frequency mean reversion
 function formulaOracle(rawList) {
   var seq=toBS(rawList);
   if(seq.length<5) return formulaZigzag(rawList);
@@ -278,7 +281,6 @@ function formulaOracle(rawList) {
   return formulaZigzag(rawList);
 }
 
-// 6. Kaala
 function formulaKaala(rawList) {
   var seq=toBS(rawList);
   if(seq.length<3) return {pred:'BIG',conf:60,reason:'Kaala: default',skip:false};
@@ -291,7 +293,6 @@ function formulaKaala(rawList) {
   return formulaOracle(rawList);
 }
 
-// 7. DNA3 — triplet pattern matching
 function formulaDna3(rawList) {
   var seq=toBS(rawList);
   if(seq.length<3) return {pred:'BIG',conf:60,reason:'DNA3: default',skip:false};
@@ -307,19 +308,16 @@ function formulaDna3(rawList) {
   return formulaZigzag(rawList);
 }
 
-// 8. Titan v3 — recovery mode
 function formulaTitan(rawList, consecLosses) {
   var seq=toBS(rawList);
   if(seq.length<3) return {pred:'BIG',conf:60,reason:'Titan: default',skip:false};
   if(consecLosses>=3) {
-    // Recovery: flip last outcome
     var opp=seq[0]==='B'?'SMALL':'BIG';
     return {pred:opp,conf:78,reason:'Titan: Recovery after '+consecLosses+' losses',skip:false};
   }
   return formulaOracle(rawList);
 }
 
-// 9. Kingpin3
 function formulaKingpin3(rawList) {
   var seq=toBS(rawList);
   if(seq.length<2) return {pred:'BIG',conf:60,reason:'KP3: default',skip:false};
@@ -335,7 +333,6 @@ function formulaKingpin3(rawList) {
   return {pred,conf:65,reason:'KP3: votes='+votes+'/4 streak='+streak,skip:false};
 }
 
-// 10. N1/N2 — next number prediction
 function formulaN1N2(rawList) {
   var nums=rawList.slice(0,10).map(item=>parseInt(String(item.number||0)));
   if(nums.length<3) return {pred:'BIG',conf:58,reason:'N1N2: default',skip:false};
@@ -345,7 +342,6 @@ function formulaN1N2(rawList) {
   return {pred,conf:62,reason:'N1N2: avg3='+avg.toFixed(1),skip:false};
 }
 
-// 11. Hacksoon — streak + alternating hybrid
 function formulaHacksoon(rawList) {
   var seq=toBS(rawList);
   if(seq.length<5) return {pred:'BIG',conf:60,reason:'Hacksoon: default',skip:false};
@@ -363,11 +359,9 @@ function formulaHacksoon(rawList) {
   return formulaOracle(rawList);
 }
 
-// 12. Kubera v2 — volume weighted
 function formulaKubera(rawList) {
   var seq=toBS(rawList);
   if(seq.length<5) return {pred:'BIG',conf:60,reason:'Kubera: default',skip:false};
-  // Weight recent more
   var score=0;
   var weights=[5,4,3,2,1];
   seq.slice(0,5).forEach((v,i)=>{score+=v==='B'?weights[i]:-weights[i];});
@@ -376,11 +370,9 @@ function formulaKubera(rawList) {
   return {pred,conf:Math.round(conf),reason:'Kubera: score='+score,skip:conf<55};
 }
 
-// 13. Itachi V30
 function formulaItachi(rawList) {
   var seq=toBS(rawList);
   if(seq.length<6) return {pred:'BIG',conf:60,reason:'Itachi: default',skip:false};
-  // Pattern: last 3 majority + streak reversal
   var last3=seq.slice(0,3);
   var bigIn3=last3.filter(x=>x==='B').length;
   var streak=1;
@@ -391,7 +383,6 @@ function formulaItachi(rawList) {
   return {pred,conf,reason:'Itachi: big3='+bigIn3+'/3 streak='+streak,skip:false};
 }
 
-// 14. ZN1P — Zero/Non-zero Pattern
 function formulaZN1P(rawList) {
   var nums=rawList.slice(0,10).map(item=>parseInt(String(item.number||0)));
   if(nums.length<3) return {pred:'BIG',conf:60,reason:'ZN1P: default',skip:false};
@@ -404,7 +395,6 @@ function formulaZN1P(rawList) {
   return {pred:last>=5?'BIG':'SMALL',conf:63,reason:'ZN1P: follow trend',skip:false};
 }
 
-// 15. Kutty — simple momentum
 function formulaKutty(rawList) {
   var seq=toBS(rawList);
   if(seq.length<4) return {pred:'BIG',conf:60,reason:'Kutty: default',skip:false};
@@ -413,7 +403,22 @@ function formulaKutty(rawList) {
   return {pred,conf:65,reason:'Kutty: big4='+bigCount+'/4',skip:false};
 }
 
-// Formula registry
+// ── NEW: SUM Formula ──
+function formulaSum(rawList) {
+  // Uses next issue number from rawList[0]
+  if(!rawList||!rawList.length) return {pred:'BIG',conf:60,reason:'SUM: no data',skip:false};
+  var lastIssue = String(rawList[0].issueNumber||rawList[0].issue||'0');
+  var nextIssue = String(BigInt(lastIssue)+1n);
+  var s = nextIssue;
+  if(s.length<5) return {pred:'BIG',conf:60,reason:'SUM: short period',skip:false};
+  var last5 = s.slice(-5);
+  var sum = last5.split('').reduce((a,c)=>a+parseInt(c),0);
+  var division = sum/3;
+  var lastDigit = Math.floor(division)%10;
+  var pred = lastDigit<=4?'BIG':'SMALL';
+  return {pred,conf:72,reason:'SUM: '+last5+'→'+sum+'÷3='+division.toFixed(2)+'→['+lastDigit+']→'+pred,skip:false};
+}
+
 const FORMULA_INFO = {
   shadow  : { name:'⚡ Shadow Adaptive v14.0' },
   FHaa    : { name:'🔁 FHaa (GRR Loop)' },
@@ -430,6 +435,7 @@ const FORMULA_INFO = {
   itachi  : { name:'🔥 Itachi V30' },
   zn1p    : { name:'🗳️ ZN1P' },
   kutty   : { name:'⭐ KUTTY' },
+  sum     : { name:'∑ SUM Formula' },
 };
 
 function runFormula(formulaKey, rawList, level, consecLosses) {
@@ -450,6 +456,7 @@ function runFormula(formulaKey, rawList, level, consecLosses) {
       case 'itachi'  : return formulaItachi(rawList);
       case 'zn1p'    : return formulaZN1P(rawList);
       case 'kutty'   : return formulaKutty(rawList);
+      case 'sum'     : return formulaSum(rawList);
       default        : return shadowEngine(rawList, consecLosses||0);
     }
   } catch(e) {
@@ -480,6 +487,7 @@ function makeState(phone) {
     history:[], betHistory:[], predHistory:[], logs:[],
     currentIssue:null, prediction:null, sessionStart:null,
     loggedIn:true, _interval:null, consecLosses:0,
+    modeUrl: PUB_URLS[0],
   };
 }
 
@@ -503,6 +511,21 @@ app.post('/api/goa/login', async (req,res) => {
   catch(e) { res.json({code:-1,msg:e.message}); }
 });
 
+// Balance API endpoint (direct call)
+app.post('/api/balance', async (req,res) => {
+  var token = req.body.token;
+  if(!token) return res.json({code:-1,msg:'No token'});
+  try {
+    var bal = await getBalance(token);
+    res.json({code:0,balance:bal});
+  } catch(e) { res.json({code:-1,msg:e.message,balance:0}); }
+});
+
+// Formula list endpoint
+app.get('/api/formulas', (req,res) => {
+  res.json(FORMULA_INFO);
+});
+
 // ── SOCKET.IO ─────────────────────────
 io.on('connection', socket => {
   console.log('[KP] Connected:', socket.id);
@@ -518,7 +541,13 @@ io.on('connection', socket => {
     st.loggedIn     = true;
     viewPhone = phone;
     socket.join('acct:'+phone);
-    try { st.balance = await getBalance(st.webapiToken||st.lotteryToken); } catch(e){}
+
+    // ✅ Fixed: fetch balance with retry
+    try {
+      var bal = await getBalance(st.webapiToken||st.lotteryToken);
+      st.balance = bal;
+    } catch(e){ st.balance=0; }
+
     emitState(phone, socket);
     broadcastAccountList();
   });
@@ -573,9 +602,11 @@ io.on('connection', socket => {
     var st=accounts[phone];
     st.formula = d.formula||'shadow';
     st.formulaInfo = FORMULA_INFO[st.formula]||{name:st.formula};
-    if(st.formula==='FHaa') grrIdx=0; // reset GRR loop
+    if(st.formula==='FHaa') grrIdx=0;
     log(phone,'🧠 Formula: '+(st.formulaInfo.name),'info');
     emitState(phone);
+    // ✅ Immediately emit updated formulaInfo to UI
+    io.to('acct:'+phone).emit('formulaChanged',{formula:st.formula,formulaInfo:st.formulaInfo});
   });
 
   socket.on('setLevels', d => {
@@ -608,27 +639,72 @@ io.on('connection', socket => {
     }
   });
 
+  // ✅ Fixed: CSV export — fetch from public API properly
   socket.on('exportHistory', async d => {
-    var phone=d&&d.phone; var total=d&&d.totalRecords||500;
-    if(!phone||!accounts[phone]){socket.emit('exportHistoryResult',{ok:false,list:[]});return;}
-    var all=[], pageSize=100, maxPages=Math.ceil(total/pageSize);
+    var phone=d&&d.phone;
+    var total=d&&d.totalRecords||500;
+    if(!phone||!accounts[phone]){
+      socket.emit('exportHistoryResult',{ok:false,list:[],msg:'Account not found'});
+      return;
+    }
+    var st = accounts[phone];
+    var all=[];
+    var pageSize=100;
+    var maxPages=Math.ceil(total/pageSize);
+
     for(var page=1;page<=maxPages;page++){
       socket.emit('exportHistoryProgress',{page,maxPages,total:all.length});
       try {
-        var list=await fetchPublicList(pageSize);
-        if(list&&list.length>0) all=all.concat(list); else break;
-      } catch(e){socket.emit('exportHistoryProgress',{page,maxPages,total:all.length,error:e.message});}
+        // Fetch from public URL — no auth needed
+        var r = await axios.get(
+          (st.modeUrl||PUB_URLS[0])+'?pageNo='+page+'&pageSize='+pageSize+'&gameId=1&t='+Date.now(),
+          { headers:{'Accept':'application/json','User-Agent':BYPASS_HEADERS['User-Agent']}, timeout:10000 }
+        );
+        var data = r.data&&(r.data.data||r.data);
+        var list = (data&&(data.list||data.issueList))||(r.data&&r.data.list)||[];
+        if(Array.isArray(list)&&list.length>0) {
+          all=all.concat(list);
+        } else {
+          break; // No more data
+        }
+      } catch(e){
+        socket.emit('exportHistoryProgress',{page,maxPages,total:all.length,error:e.message});
+      }
       if(all.length>=total) break;
       await new Promise(r=>setTimeout(r,300));
     }
-    socket.emit('exportHistoryResult',{ok:true,list:all.slice(0,total)});
+
+    // Format for CSV
+    var formatted = all.slice(0,total).map(item=>{
+      var num = parseInt(item.number||item.num||0);
+      return {
+        issueNumber: item.issueNumber||item.issue||'',
+        number: num,
+        bigSmall: num>=5?'BIG':'SMALL',
+        color: num===0||num===5?'Violet':(num%2===0?'Red':'Green'),
+        time: item.startTime||item.time||'',
+      };
+    });
+
+    socket.emit('exportHistoryResult',{ok:true,list:formatted,total:formatted.length});
+  });
+
+  // ✅ Balance refresh on demand
+  socket.on('refreshBalance', async d => {
+    var phone=d&&d.phone; if(!phone||!accounts[phone]) return;
+    var st=accounts[phone];
+    try {
+      st.balance = await getBalance(st.webapiToken||st.lotteryToken);
+    } catch(e){ }
+    socket.emit('balanceUpdate',{phone,balance:st.balance});
+    broadcastAccountList();
   });
 
   socket.on('disconnect', ()=>{console.log('[KP] Disconnected:',socket.id);});
 });
 
 // ══════════════════════════════════════
-//  ENGINE LOOP
+//  ENGINE LOOP — Fixed
 // ══════════════════════════════════════
 async function startEngine(phone) {
   var st=accounts[phone]; if(!st) return;
@@ -638,23 +714,25 @@ async function startEngine(phone) {
     if(!accounts[phone]||st.engine!=='running') return;
     try {
       var token=st.webapiToken||st.lotteryToken;
-      var issue=await getCurrentIssue(token);
-      if(!issue) return;
+      var issue=await getCurrentIssue(token, st.modeUrl);
+      if(!issue||!issue.issueNumber) return;
 
       var issueNo  = String(issue.issueNumber||'');
       var countdown= parseInt(issue.remainTime||30);
 
       io.to('acct:'+phone).emit('countdown',{secs:countdown,total:30});
 
-      // New period → check last result
+      // ✅ New period detected → check last result
       if(lastIssue && issueNo!==lastIssue) {
-        await new Promise(r=>setTimeout(r,2000));
-        var lastResult=await getLastResult(token);
-        if(lastResult && String(lastResult.issueNumber||lastResult.issue)===String(lastIssue)) {
-          var num=parseInt(lastResult.number);
+        await new Promise(r=>setTimeout(r,2500));
+        var lastResult=await getLastResult(token, st.modeUrl);
+        if(lastResult) {
+          var resultIss = String(lastResult.issueNumber||lastResult.issue||'');
+          var num=parseInt(lastResult.number||lastResult.num||0);
           var bs=num>=5?'BIG':'SMALL';
+
           st.history.push({issue:lastIssue,number:num,bs});
-          if(st.history.length>100) st.history=st.history.slice(-100);
+          if(st.history.length>200) st.history=st.history.slice(-200);
 
           if(pendingBet && String(pendingBet.issue)===String(lastIssue)) {
             var won=pendingBet.pred===bs;
@@ -685,16 +763,24 @@ async function startEngine(phone) {
               log(phone,'🚨 MAX LEVEL — engine stopped','warn');
               emitState(phone); broadcastAccountList(); return;
             }
+            // ✅ Refresh balance after result
             try{st.balance=await getBalance(token);}catch(e){}
             emitState(phone); broadcastAccountList();
           }
         }
       }
 
-      // New issue → predict & bet
+      // ✅ New issue → predict & bet
       if(issueNo!==lastIssue) {
         lastIssue=issueNo;
-        var rawHistory=await getHistory(token,50);
+        var rawHistory=await getHistory(token,100,st.modeUrl);
+
+        // ✅ Always run formula — no skip due to empty data
+        if(rawHistory.length===0) {
+          log(phone,'⚠️ No history data yet, retrying...','warn');
+          return;
+        }
+
         var eng=runFormula(st.formula, rawHistory, st.level, st.consecLosses);
         var predBS=eng.pred, predConf=eng.conf, predReason=eng.reason, skip=eng.skip;
 
@@ -702,10 +788,13 @@ async function startEngine(phone) {
         st.predHistory.unshift({forIssue:issueNo,pred:predBS,formula:st.formula,conf:predConf,reason:predReason});
         if(st.predHistory.length>100) st.predHistory=st.predHistory.slice(0,100);
 
+        // ✅ Always emit prediction to UI (even if skip)
+        emitState(phone);
+
         if(skip) {
           log(phone,'⏸ SKIP #'+issueNo.slice(-5)+' conf='+predConf+'% < threshold','warn');
           io.to('acct:'+phone).emit('betStatus',{cls:'watch',icon:'⏸',label:'SKIP',detail:'Confidence '+predConf+'% below threshold',bar:0});
-          emitState(phone); return;
+          return;
         }
 
         log(phone,'🔮 #'+issueNo.slice(-5)+' → '+predBS+' ['+predConf+'%] '+st.formula+' LV'+st.level,'info');
@@ -715,7 +804,7 @@ async function startEngine(phone) {
           st.watchCount++;
           log(phone,'👁️ Watch ('+st.watchCount+'/'+st.watchLossTarget+') — skip real bet','warn');
           io.to('acct:'+phone).emit('betStatus',{cls:'watch',icon:'👁️',label:'WATCHING',detail:'Watch '+st.watchCount+'/'+st.watchLossTarget,bar:Math.round(st.watchCount/st.watchLossTarget*100)});
-          emitState(phone); return;
+          return;
         }
         st.watchCount=0;
 
@@ -763,6 +852,7 @@ function emitState(phone,target) {
     levels:st.levels, watchEnabled:st.watchEnabled, watchLossTarget:st.watchLossTarget,
     betHistory:st.betHistory, predHistory:st.predHistory, prediction:st.prediction,
     loggedIn:st.loggedIn, sessionElapsed:st.sessionStart?Date.now()-st.sessionStart:0,
+    formulaList: FORMULA_INFO,
   };
   if(target){target.emit('state',snap);target.emit('logs',st.logs);}
   else io.to('acct:'+phone).emit('state',snap);
