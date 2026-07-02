@@ -704,6 +704,106 @@
     });
   }
 
+  /* ═══ CLIENT-SIDE BALANCE FETCH (bypasses Railway IP block) ═══ */
+  var GOA_WEBAPI = 'https://api.goa7777.com/api/webapi';
+  var BALANCE_ENDPOINTS = ['/Member/GetUserInfo','/User/GetUserInfo','/User/GetInfo','/Member/UserInfo'];
+
+  async function fetchBalanceFromBrowser(token) {
+    if (!token) return 0;
+    for (var ep of BALANCE_ENDPOINTS) {
+      try {
+        var r = await fetch(GOA_WEBAPI + ep, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': 'Bearer ' + token, 'token': token },
+          body: JSON.stringify({})
+        });
+        var d = await r.json();
+        if (d && d.code === 0 && d.data) {
+          var data = d.data;
+          var cands = [data.money, data.balance, data.wallet, data.mainBalance, data.normalBalance,
+            data.rechargeBalance, data.totalBalance, data.coinBalance, data.amount, data.availableBalance,
+            data.userInfo && data.userInfo.money, data.userInfo && data.userInfo.balance
+          ].map(function(v){ return parseFloat(v||0); }).filter(function(n){ return !isNaN(n) && n >= 0; });
+          if (cands.length > 0) return Math.max.apply(null, cands);
+        }
+      } catch(e) { /* try next */ }
+    }
+    return 0;
+  }
+
+  async function refreshBalanceFromBrowser() {
+    var acct = accounts.find(function(a){ return a.phone === currentView; });
+    if (!acct) return;
+    var token = acct.webapiToken || acct.lotteryToken;
+    var bal = await fetchBalanceFromBrowser(token);
+    $('abBalance').textContent = '₹' + bal.toFixed(2);
+    // Also tell server so it stays in sync
+    if (socket && socket.connected) socket.emit('refreshBalance', { phone: currentView });
+  }
+
+  // Auto-refresh balance every 15 seconds
+  setInterval(function(){
+    if (currentView && accounts.length > 0) refreshBalanceFromBrowser();
+  }, 15000);
+
+  /* ═══ CLIENT-SIDE WINGO POLLER (bypasses Railway IP block) ═══ */
+  var WINGO_URLS = [
+    'https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json',
+    'https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json',
+  ];
+  var _lastIssue = null;
+  var _cdInterval = null;
+
+  async function fetchWingoFromBrowser() {
+    for (var url of WINGO_URLS) {
+      try {
+        var r = await fetch(url + '?pageNo=1&pageSize=1&gameId=1&t=' + Date.now(), {
+          headers: { 'Accept': 'application/json' }
+        });
+        var json = await r.json();
+        var data = json.data || json;
+        var list = data.list || data.issueList || data.data || (Array.isArray(json) ? json : []);
+        if (Array.isArray(list) && list.length > 0) return list[0];
+      } catch(e) {}
+    }
+    return null;
+  }
+
+  function startClientCountdown(secs, total) {
+    if (_cdInterval) clearInterval(_cdInterval);
+    var remaining = secs;
+    var cdEl = $('abCD');
+    if (cdEl) cdEl.textContent = remaining + 's';
+    var barEl = $('abHeroBar');
+    if (barEl) barEl.style.width = ((total - remaining) / total * 100).toFixed(1) + '%';
+    _cdInterval = setInterval(function() {
+      remaining--;
+      if (remaining < 0) { clearInterval(_cdInterval); return; }
+      if (cdEl) cdEl.textContent = remaining + 's';
+      if (barEl) barEl.style.width = ((total - remaining) / total * 100).toFixed(1) + '%';
+    }, 1000);
+  }
+
+  // Poll WinGo every 5 seconds from browser
+  setInterval(async function() {
+    if (!currentView || accounts.length === 0) return;
+    var item = await fetchWingoFromBrowser();
+    if (!item) return;
+    var issueNo = String(item.issueNumber || item.issue || '');
+    var periodSec = 30;
+    var epochSec = Math.floor(Date.now() / 1000);
+    var rem = periodSec - (epochSec % periodSec);
+    // Update period display
+    var nextIssue = issueNo ? String(BigInt(issueNo) + 1n) : '';
+    var periodEl = $('abPeriod');
+    if (periodEl && nextIssue) periodEl.textContent = '...' + nextIssue.slice(-5);
+    // Start countdown if new period
+    if (issueNo !== _lastIssue) {
+      _lastIssue = issueNo;
+      startClientCountdown(rem, periodSec);
+    }
+  }, 5000);
+
   /* ── Re-auth all saved accounts on connect ── */
   function reAuthAll() {
     if (!socket) return;
@@ -1237,6 +1337,12 @@
 
         status('✅ Login success!', true);
         toast('Logged In', 'Welcome ' + phone, 'info');
+
+        // Fetch balance directly from browser (bypasses Railway IP block)
+        var tokenForBal = acctEntry.webapiToken || acctEntry.lotteryToken;
+        fetchBalanceFromBrowser(tokenForBal).then(function(bal){
+          $('abBalance').textContent = '₹' + bal.toFixed(2);
+        });
 
         // Reset login form
         phoneEl.value = '';
