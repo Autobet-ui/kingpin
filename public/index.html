@@ -1,150 +1,231 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-  <title>KINGPIN 3.0 — Auto Bet</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/css/autobet.css" />
-  <!-- Firebase SDK -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getDatabase, ref, onValue, set, remove, get } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<title>KINGPIN 3.0 — Auto Bet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet"/>
 
-    // ══════════════════════════════════════════
-    //  🔥 FIREBASE CONFIG — KINGPIN Admin Panel से connected
-    //  (xgteam-4da84 project)
-    // ══════════════════════════════════════════
-    const firebaseConfig = {
-      apiKey: "AIzaSyDJCCTkjtFY-Cs4NZHLL2his2frfw-VStY",
-      authDomain: "xgteam-4da84.firebaseapp.com",
-      databaseURL: "https://xgteam-4da84-default-rtdb.firebaseio.com",
-      projectId: "xgteam-4da84",
-      storageBucket: "xgteam-4da84.firebasestorage.app",
-      messagingSenderId: "1064087545075",
-      appId: "1:1064087545075:android:75c07b416dda8472718386"
-    };
+<style>
+:root{
+  --bg:#060610;--bg2:#0b0b1e;--bg3:#10102a;--bg4:#14142f;
+  --border:#1c1c38;--border2:#252550;
+  --text:#e2e2f5;--muted:#44446a;
+  --cyan:#00d4ff;--purple:#7c6fff;
+  --green:#39e87a;--red:#ff5b7a;--yellow:#fbbf24;--orange:#f97316;
+  --mono:'JetBrains Mono',monospace;--head:'Orbitron',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);background-image:radial-gradient(ellipse at 20% 0%,rgba(124,111,255,.06) 0%,transparent 60%),radial-gradient(ellipse at 80% 100%,rgba(0,212,255,.04) 0%,transparent 60%);color:var(--text);font-family:var(--mono);font-size:13px;min-height:100vh;overflow-x:hidden}
+input,button,select,textarea{font-family:var(--mono)}
 
-    const firebaseApp = initializeApp(firebaseConfig);
-    const db = getDatabase(firebaseApp);
+/* SCREEN */
+.kp-screen{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% -10%,rgba(124,111,255,.18) 0%,transparent 60%),radial-gradient(ellipse at 50% 110%,rgba(0,212,255,.1) 0%,transparent 60%),#060610}
+.kp-gate-inner{width:100%;max-width:340px;padding:32px 24px;background:rgba(255,255,255,.025);border:1px solid var(--border2);border-radius:20px;display:flex;flex-direction:column;gap:4px;backdrop-filter:blur(20px);box-shadow:0 0 60px rgba(124,111,255,.08),inset 0 1px 0 rgba(255,255,255,.06)}
+.kp-gate-logo{font-family:var(--head);font-size:28px;font-weight:900;letter-spacing:5px;background:linear-gradient(135deg,#fff 0%,var(--cyan) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;text-align:center;margin-bottom:2px}
+.kp-gate-sub{font-size:9px;color:var(--muted);letter-spacing:4px;text-align:center;margin-bottom:20px;text-transform:uppercase}
+.kp-input-label{font-size:10px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px;margin-top:10px}
+input[type=tel],input[type=password],input[type=text],input[type=number]{width:100%;padding:12px 14px;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:10px;color:var(--text);font-size:13px;outline:none;transition:border .2s,box-shadow .2s}
+input:focus{border-color:var(--purple);box-shadow:0 0 0 3px rgba(124,111,255,.12)}
+.kp-btn-main{width:100%;padding:13px;background:linear-gradient(135deg,var(--purple) 0%,#5a50e8 50%,var(--cyan) 100%);border:none;border-radius:10px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:1.5px;transition:opacity .2s,transform .1s;box-shadow:0 4px 20px rgba(124,111,255,.3)}
+.kp-btn-main:hover{opacity:.9;transform:translateY(-1px)}
+.kp-btn-main:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.kp-sec-btn{padding:7px 14px;background:rgba(124,111,255,.1);border:1px solid rgba(124,111,255,.22);border-radius:8px;color:#a78bfa;font-size:11px;cursor:pointer;transition:background .2s}
+.kp-sec-btn:hover{background:rgba(124,111,255,.2)}
+.btn-danger{color:var(--red);border-color:rgba(255,91,122,.22);background:rgba(255,91,122,.07)}
+.btn-danger:hover{background:rgba(255,91,122,.14)}
+.kp-btn-logout{padding:6px 10px;background:rgba(255,91,122,.08);border:1px solid rgba(255,91,122,.18);border-radius:8px;color:var(--red);font-size:13px;cursor:pointer}
+.status-msg{font-size:12px;min-height:16px;color:var(--muted)}
+.status-msg.ok{color:var(--green)}.status-msg.err{color:var(--red)}
 
-    // ── Device ID generation / retrieval ──
-    let deviceId = localStorage.getItem('KP_device_id');
-    if (!deviceId) {
-      const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-      deviceId = Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-      localStorage.setItem('KP_device_id', deviceId);
-    }
-    window.KP_DEVICE_ID = deviceId;
-    window.KP_DB = db;
-    window.KP_DB_REF = ref;
-    window.KP_DB_SET = set;
-    window.KP_DB_REMOVE = remove;
-    window.KP_DB_GET = get;
+/* CAPTCHA */
+.captcha-box{position:relative;width:280px;height:175px;border-radius:10px;overflow:hidden;background:var(--bg2);margin:10px auto;border:1px solid var(--border2)}
+.captcha-bg{width:100%;height:100%;display:block}
+.captcha-piece{position:absolute;top:0;left:0;width:56px;height:175px;cursor:grab;user-select:none;filter:drop-shadow(0 0 8px rgba(0,212,255,.7))}
+.slider-wrap{width:280px;margin:8px auto 0}
+.slider-track{position:relative;width:100%;height:36px;background:rgba(255,255,255,.04);border:1px solid var(--border2);border-radius:18px;overflow:hidden}
+.slider-thumb{position:absolute;top:3px;left:3px;width:30px;height:30px;background:linear-gradient(135deg,var(--purple),var(--cyan));border-radius:50%;cursor:grab;display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;box-shadow:0 0 14px rgba(124,111,255,.6)}
+.slider-thumb::after{content:'▶';font-size:10px}
 
-    // ── Show device ID in gate ──
-    const dispEl = document.getElementById('fbDeviceIdDisplay');
-    if (dispEl) dispEl.textContent = deviceId;
+/* HEADER */
+.kp-header{display:flex;align-items:center;gap:8px;padding:10px 16px;background:rgba(6,6,16,.85);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:100;backdrop-filter:blur(20px)}
+.kp-brand{display:flex;align-items:baseline;gap:7px}
+.kp-brand-text{font-family:var(--head);font-size:15px;font-weight:900;letter-spacing:3px;background:linear-gradient(90deg,#fff 0%,var(--cyan) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.kp-brand-ver{font-size:9px;color:var(--cyan);background:rgba(0,212,255,.1);border:1px solid rgba(0,212,255,.2);padding:1px 6px;border-radius:4px;letter-spacing:1px}
+.kp-header-spacer{flex:1}
+.kp-balance{font-family:var(--head);font-size:14px;font-weight:900;background:linear-gradient(90deg,var(--green),#a8ff78);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;letter-spacing:1px}
+.ab-engine-pill{font-size:9px;font-weight:700;letter-spacing:1.5px;padding:4px 11px;border-radius:999px;background:rgba(255,91,122,.08);border:1px solid rgba(255,91,122,.2);color:var(--red);text-transform:uppercase}
+.pill-running{background:rgba(57,232,122,.08);border-color:rgba(57,232,122,.25);color:var(--green);animation:pill-pulse 2s ease-in-out infinite}
+@keyframes pill-pulse{0%,100%{box-shadow:0 0 0 0 rgba(57,232,122,0)}50%{box-shadow:0 0 8px 2px rgba(57,232,122,.25)}}
 
-    // ── Check device authorization ──
-    const deviceRef = ref(db, 'approved_devices/' + deviceId);
-    onValue(deviceRef, (snapshot) => {
-      const data = snapshot.val();
-      const gate = document.getElementById('fbDeviceGate');
-      const statusEl = document.getElementById('fbGateStatus');
-      const dispEl2 = document.getElementById('fbDeviceIdDisplay');
+/* ACCOUNTS BAR */
+.kp-accounts-bar{display:flex;align-items:center;gap:6px;padding:8px 16px;border-bottom:1px solid var(--border);overflow-x:auto;background:rgba(11,11,30,.5)}
+.kp-acct-tabs{display:flex;gap:6px}
+.kp-acct-tab{display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:8px;background:var(--bg2);border:1px solid var(--border);cursor:pointer;font-size:11px;color:var(--muted);white-space:nowrap;transition:all .2s}
+.kp-acct-tab.active{background:rgba(124,111,255,.12);border-color:rgba(124,111,255,.3);color:#a78bfa;box-shadow:0 0 10px rgba(124,111,255,.1)}
+.kp-acct-add{padding:5px 12px;border-radius:8px;background:rgba(57,232,122,.07);border:1px dashed rgba(57,232,122,.25);color:var(--green);font-size:16px;cursor:pointer}
 
-      if (dispEl2) dispEl2.textContent = deviceId;
+/* GRID */
+.kp-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:12px 14px}
+@media(max-width:680px){.kp-grid{grid-template-columns:1fr}}
 
-      if (!data) {
-        // Not in database
-        if (statusEl) {
-          statusEl.style.color = '#f87171';
-          statusEl.style.background = 'rgba(248,113,113,0.08)';
-          statusEl.style.borderColor = 'rgba(248,113,113,0.2)';
-          statusEl.textContent = '❌ Device not authorized. Contact admin with your Device ID.';
-        }
-        if (gate) gate.style.display = 'flex';
-        window.KP_FIREBASE_AUTHORIZED = false;
-        window.KP_PRO_ACCESS = false;
-        return;
-      }
+/* HERO */
+.kp-hero{background:linear-gradient(160deg,#0e0e2a 0%,#08081a 100%);border:1px solid var(--border2);border-radius:16px;padding:18px 16px 14px;margin-bottom:10px;position:relative;overflow:hidden}
+.kp-hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 50% 0%,rgba(124,111,255,.08) 0%,transparent 70%);pointer-events:none}
+.kp-hero-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.kp-hero-label{font-size:9px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
+.kp-hero-period{font-size:9px;color:var(--cyan);font-family:var(--mono);letter-spacing:.05em;background:rgba(0,212,255,.08);padding:2px 8px;border-radius:4px;border:1px solid rgba(0,212,255,.15)}
+.ab-hero-pred{font-family:var(--head);font-size:46px;font-weight:900;text-align:center;letter-spacing:6px;padding:6px 0 4px;transition:color .3s,text-shadow .3s}
+.pred-big{color:var(--red);text-shadow:0 0 30px rgba(255,91,122,.5),0 0 60px rgba(255,91,122,.2)}
+.pred-small{color:#60c6ff;text-shadow:0 0 30px rgba(96,198,255,.5),0 0 60px rgba(96,198,255,.2)}
+.pred-wait{color:var(--muted);text-shadow:none}
+.kp-conf-row{display:flex;align-items:center;gap:8px;margin:6px 0 4px}
+.kp-conf-label{font-size:9px;color:var(--muted);letter-spacing:.06em;white-space:nowrap}
+.kp-conf-bar{flex:1;height:4px;background:rgba(255,255,255,.06);border-radius:999px;overflow:hidden}
+.kp-conf-fill{height:100%;border-radius:999px;transition:width .6s ease,background .4s;background:linear-gradient(90deg,var(--purple),var(--cyan))}
+.kp-conf-fill.high{background:linear-gradient(90deg,#39e87a,#00d4ff)}
+.kp-conf-fill.mid{background:linear-gradient(90deg,#fbbf24,#f97316)}
+.kp-conf-fill.low{background:linear-gradient(90deg,#ff5b7a,#f97316)}
+.kp-conf-pct{font-family:var(--head);font-size:11px;font-weight:700;min-width:36px;text-align:right}
+.kp-conf-pct.high{color:var(--green)}.kp-conf-pct.mid{color:var(--yellow)}.kp-conf-pct.low{color:var(--red)}
+.kp-hero-cd-row{text-align:center;margin:2px 0}
+.kp-hero-cd{font-family:var(--head);font-size:24px;color:var(--yellow);text-shadow:0 0 14px rgba(251,191,36,.4)}
+.kp-hero-subs{display:flex;flex-wrap:wrap;justify-content:center;gap:4px;min-height:18px;margin-top:6px}
+.kp-sub-chip{font-size:9px;padding:2px 7px;border-radius:4px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);color:var(--muted);letter-spacing:.04em}
+.kp-sub-chip.big{background:rgba(255,91,122,.1);border-color:rgba(255,91,122,.2);color:var(--red)}
+.kp-sub-chip.small{background:rgba(96,198,255,.1);border-color:rgba(96,198,255,.2);color:#60c6ff}
+.kp-hero-bar{height:2px;background:rgba(255,255,255,.05);border-radius:999px;margin-top:12px;overflow:hidden}
+.kp-hero-bar-fill{height:100%;background:linear-gradient(90deg,var(--purple),var(--cyan));border-radius:999px;transition:width .5s linear;width:0%}
 
-      if (data.status === 'active') {
-        // Check expiry
-        if (data.expiry && Date.now() > data.expiry) {
-          if (statusEl) {
-            statusEl.style.color = '#fbbf24';
-            statusEl.textContent = '⏰ Subscription Expired! Please contact admin to renew.';
-          }
-          if (gate) gate.style.display = 'flex';
-          window.KP_FIREBASE_AUTHORIZED = false;
-          window.KP_PRO_ACCESS = false;
-        } else {
-          // ✅ Authorized!
-          window.KP_FIREBASE_AUTHORIZED = true;
-          window.KP_PRO_ACCESS = (data.proRexen === true || data.pro_rexen_access === true);
+/* CONTROLS */
+.kp-ctrl{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:14px;margin-bottom:10px}
+.kp-controls-row{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.kp-engine-btns{display:flex;gap:6px;flex:1}
+.kp-btn-eng{flex:1;padding:11px;border:none;border-radius:10px;font-family:var(--mono);font-size:12px;font-weight:700;cursor:pointer;letter-spacing:1.5px;transition:all .2s}
+.kp-btn-start{background:linear-gradient(135deg,#059669,#065f46);color:#fff;box-shadow:0 4px 16px rgba(5,150,105,.3)}
+.kp-btn-stop{background:linear-gradient(135deg,#dc2626,#991b1b);color:#fff;box-shadow:0 4px 16px rgba(220,38,38,.3)}
+.kp-btn-eng:hover{transform:translateY(-1px);opacity:.9}
+.kp-mini-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+.kp-ms{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:9px 8px;position:relative;overflow:hidden}
+.kp-ms::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(124,111,255,.3),transparent)}
+.kp-ms-l{font-size:8px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px}
+.kp-ms-v{font-family:var(--head);font-size:13px;color:var(--cyan);letter-spacing:.5px}
+.ab-stat-val{font-family:var(--mono);font-size:12px}
+.vg{color:var(--green)!important}.vr{color:var(--red)!important}
+.kp-ctrl-actions{display:flex;gap:4px}
 
-          if (statusEl) {
-            statusEl.style.color = '#4ade80';
-            statusEl.style.background = 'rgba(74,222,128,0.08)';
-            statusEl.style.borderColor = 'rgba(74,222,128,0.2)';
-            const expDays = data.expiry ? Math.ceil((data.expiry - Date.now()) / 86400000) : '∞';
-            statusEl.textContent = '✅ Access Granted! Expires in ' + expDays + ' day(s)';
-          }
+/* BET STATUS */
+.ab-bet-status{display:flex;align-items:center;gap:10px;padding:11px 14px;background:var(--bg2);border-radius:12px;border:1px solid var(--border);margin-bottom:10px;position:relative;overflow:hidden;transition:border-color .3s,background .3s}
+.s-betting{border-color:rgba(251,191,36,.35);background:rgba(251,191,36,.04);box-shadow:0 0 16px rgba(251,191,36,.06)}
+.s-watch{border-color:rgba(167,139,250,.3);background:rgba(167,139,250,.04)}
+.s-win{border-color:rgba(57,232,122,.35);background:rgba(57,232,122,.04);box-shadow:0 0 16px rgba(57,232,122,.06)}
+.s-loss{border-color:rgba(255,91,122,.35);background:rgba(255,91,122,.04);box-shadow:0 0 16px rgba(255,91,122,.06)}
+.kp-bs-icon{font-size:20px}.kp-bs-label{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}.kp-bs-detail{font-size:10px;color:var(--muted);margin-top:2px}
+.kp-bs-timer{font-family:var(--head);font-size:13px;color:var(--cyan);white-space:nowrap;letter-spacing:1px}
+.kp-bs-bar{position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--bg3)}
+.kp-bs-bar-fill{height:100%;background:linear-gradient(90deg,var(--purple),var(--cyan));transition:width .5s linear}
+.ab-maxlvl-banner{background:rgba(255,91,122,.06);border:1px solid rgba(255,91,122,.25);border-radius:12px;padding:14px 16px;margin-bottom:10px;text-align:center;box-shadow:0 0 20px rgba(255,91,122,.06)}
+.banner-title{font-family:var(--head);font-size:13px;color:var(--red);letter-spacing:1.5px}
+.banner-msg{font-size:11px;color:var(--muted);margin-top:4px}
 
-          if (gate) {
-            setTimeout(() => {
-              gate.style.opacity = '0';
-              gate.style.transform = 'scale(0.96)';
-              setTimeout(() => { gate.style.display = 'none'; }, 450);
-            }, 1200);
-          }
-        }
-      } else {
-        if (statusEl) {
-          statusEl.style.color = '#fbbf24';
-          statusEl.textContent = '🔒 Account inactive. Contact admin to activate.';
-        }
-        if (gate) gate.style.display = 'flex';
-        window.KP_FIREBASE_AUTHORIZED = false;
-        window.KP_PRO_ACCESS = false;
-      }
-    });
-  </script>
+/* CARDS */
+.kp-card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;margin-bottom:10px;overflow:hidden;transition:box-shadow .2s}
+.kp-card:hover{box-shadow:0 0 0 1px rgba(124,111,255,.1)}
+.kp-card-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:background .2s}
+.kp-card-head:hover{background:rgba(255,255,255,.02)}
+.kp-card.collapsed .kp-card-head{border-bottom:none}
+.kp-card.collapsed .kp-card-body{display:none}
+.kp-card-title{display:flex;align-items:center;gap:8px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text)}
+.kp-card-title .icon{font-size:14px}
+.kp-chevron{font-size:10px;color:var(--muted);transition:transform .2s}
+.kp-card:not(.collapsed) .kp-chevron{transform:rotate(180deg)}
+.kp-card-body{padding:14px}
+.kp-card-body.p0{padding:0}
+.kp-sec-actions{display:flex;gap:4px}
+
+/* LOG */
+.kp-log{max-height:220px;overflow-y:auto;font-size:11px;line-height:1.7}
+.kp-log-line{padding:3px 0;border-bottom:1px solid rgba(255,255,255,.03);display:flex;gap:6px;align-items:flex-start}
+.kp-log-time{color:var(--muted);font-size:10px;white-space:nowrap;padding-top:1px}
+.success{color:var(--green)}.error{color:var(--red)}.warn{color:var(--yellow)}.info{color:#a78bfa}
+
+/* CONFIG */
+.kp-config-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.kp-config-field label{display:block;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px}
+.kp-config-preview{font-size:11px;color:var(--muted);padding:8px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:8px}
+.kp-divider{height:1px;background:var(--border);margin:12px 0}
+.kp-formula-label{font-size:9px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px}
+.kp-formula-active{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;background:rgba(57,232,122,.06);border:1px solid rgba(57,232,122,.2);border-radius:10px;font-size:12px;font-weight:700;color:var(--green)}
+.kp-watch-row{display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;margin-top:10px}
+.kp-watch-title{font-size:11px;color:var(--text);margin-bottom:3px}
+.kp-watch-desc{font-size:10px;color:var(--muted)}
+.ab-watch-count{width:36px;padding:2px 4px;text-align:center;display:inline;font-size:12px}
+.kp-toggle{position:relative;display:inline-block;width:42px;height:24px;flex-shrink:0}
+.kp-toggle input{opacity:0;width:0;height:0}
+.kp-toggle-slider{position:absolute;inset:0;background:var(--bg4);border:1px solid var(--border2);border-radius:999px;cursor:pointer;transition:.25s}
+.kp-toggle-slider::before{content:'';position:absolute;width:18px;height:18px;left:2px;top:2px;background:var(--muted);border-radius:50%;transition:.25s}
+.kp-toggle input:checked+.kp-toggle-slider{background:rgba(124,111,255,.25);border-color:rgba(124,111,255,.45)}
+.kp-toggle input:checked+.kp-toggle-slider::before{transform:translateX(18px);background:var(--purple);box-shadow:0 0 8px rgba(124,111,255,.5)}
+.kp-edit-toggle{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);cursor:pointer}
+
+/* LEVEL CHIPS */
+.ab-level-chip{display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:6px;background:var(--bg3);border:1px solid var(--border);font-size:11px;color:var(--muted);transition:all .2s;white-space:nowrap}
+.ab-level-chip.current{border-color:var(--yellow);color:var(--yellow);background:rgba(251,191,36,.08);box-shadow:0 0 10px rgba(251,191,36,.12)}
+.ab-level-chip.passed{border-color:rgba(57,232,122,.2);color:rgba(57,232,122,.5);background:rgba(57,232,122,.04)}
+.level-input{width:46px;padding:2px 4px;text-align:center;background:var(--bg4);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-size:11px}
+.ab-btn-save-levels{margin-top:10px;width:100%;padding:10px;background:linear-gradient(135deg,var(--green),#059669);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--mono);letter-spacing:1px}
+
+/* TABLES */
+.kp-tbl-scroll{overflow-x:auto}
+.ab-history-table{width:100%;border-collapse:collapse;font-size:11px}
+.ab-history-table th{padding:8px;text-align:left;font-size:8px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;border-bottom:1px solid var(--border);background:var(--bg3)}
+.ab-history-table td{padding:7px 8px;border-bottom:1px solid rgba(255,255,255,.03);color:var(--text)}
+.ab-history-table tr:hover td{background:rgba(255,255,255,.02)}
+.row-win td{border-left:2px solid var(--green)}.row-loss td{border-left:2px solid var(--red)}
+.ab-history-empty{padding:20px;text-align:center;color:var(--muted);font-size:11px}
+.kp-pager{display:flex;align-items:center;justify-content:center;gap:10px;padding:10px}
+.kp-pg-btn{padding:4px 14px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;cursor:pointer;transition:all .2s}
+.kp-pg-btn:hover{border-color:var(--purple);color:#a78bfa}
+.kp-pg-info{font-size:11px;color:var(--muted)}
+
+/* BET RECORD */
+.kp-bet-list{max-height:300px;overflow-y:auto;padding:8px 10px}
+.bet-item{display:flex;align-items:center;gap:8px;padding:9px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;margin-bottom:6px;font-size:11px;transition:border-color .2s}
+.bet-item:hover{border-color:var(--border2)}
+.bet-tag{font-size:9px;font-weight:700;letter-spacing:.08em;padding:3px 8px;border-radius:6px;text-transform:uppercase}
+.bet-tag.big{background:rgba(255,91,122,.12);color:var(--red);border:1px solid rgba(255,91,122,.2)}
+.bet-tag.small{background:rgba(96,198,255,.12);color:#60c6ff;border:1px solid rgba(96,198,255,.2)}
+.bet-tag.num{background:rgba(124,111,255,.12);color:#a78bfa;border:1px solid rgba(124,111,255,.2)}
+.bet-mid{flex:1}.bet-period{font-size:10px;color:var(--muted)}.bet-time{font-size:9px;color:var(--muted);margin-top:1px}
+.bet-right{display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.bet-status{font-size:9px;font-weight:700;letter-spacing:.06em}
+.bet-status.ok{color:var(--green)}.bet-status.fail{color:var(--red)}
+.bet-amt{font-family:var(--head);font-size:12px;font-weight:700}
+.bet-amt.win{color:var(--green)}.bet-amt.loss{color:var(--red)}
+.kp-empty{text-align:center;color:var(--muted);padding:18px;font-size:11px}
+
+/* TOAST */
+.ab-toast-wrap{position:fixed;bottom:20px;right:16px;z-index:99998;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.ab-toast{padding:12px 16px;border-radius:12px;background:rgba(11,11,30,.95);border:1px solid var(--border2);color:var(--text);font-size:12px;pointer-events:none;opacity:1;transition:opacity .4s;min-width:200px;backdrop-filter:blur(20px);box-shadow:0 8px 32px rgba(0,0,0,.4)}
+.ab-toast.t-info{border-color:rgba(124,111,255,.4)}
+.ab-toast.t-success{border-color:rgba(57,232,122,.4);box-shadow:0 8px 32px rgba(57,232,122,.08)}
+.ab-toast.t-error{border-color:rgba(255,91,122,.4);box-shadow:0 8px 32px rgba(255,91,122,.08)}
+.ab-toast-title{font-weight:700;margin-bottom:2px;letter-spacing:.06em}
+
+/* SCROLLBARS */
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+</style>
+
+<script>
+window.KP_PRO_ACCESS = false;
+window.KP_FIREBASE_AUTHORIZED = true;
+</script>
 </head>
 <body>
-
-<!-- ═══ FIREBASE DEVICE GATE ═══ -->
-<div id="fbDeviceGate" style="
-  position:fixed;inset:0;z-index:99999;
-  background:radial-gradient(ellipse at 50% 0%, #1A1A3E 0%, #07070F 70%);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  font-family:'JetBrains Mono',monospace;
-  transition:opacity 0.5s ease, transform 0.5s ease;
-">
-  <div style="text-align:center;padding:30px 24px;max-width:340px;width:100%">
-    <div style="font-size:28px;font-weight:900;letter-spacing:3px;color:#fff;margin-bottom:4px;font-family:'Orbitron',sans-serif">KINGPIN</div>
-    <div style="font-size:11px;color:#6677aa;letter-spacing:2px;margin-bottom:24px">DEVICE VERIFICATION</div>
-
-    <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:20px;margin-bottom:20px">
-      <div style="font-size:10px;color:#555577;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Your Device ID</div>
-      <div id="fbDeviceIdDisplay" style="font-size:13px;color:#a78bfa;font-weight:700;letter-spacing:1px;word-break:break-all;margin-bottom:10px">Generating...</div>
-      <button onclick="copyDeviceId()" style="background:rgba(108,99,255,0.15);border:1px solid rgba(108,99,255,0.3);color:#a78bfa;padding:6px 16px;border-radius:8px;font-size:11px;cursor:pointer;font-family:inherit">📋 Copy ID</button>
-    </div>
-
-    <div id="fbGateStatus" style="min-height:40px;font-size:12px;color:#fbbf24;text-align:center;margin-bottom:16px;padding:10px;background:rgba(251,191,36,0.08);border-radius:8px;border:1px solid rgba(251,191,36,0.15)">
-      ⏳ Checking device authorization...
-    </div>
-
-    <button onclick="window.open('https://t.me/RAMPHDi','_blank')" style="
-      width:100%;padding:13px;background:linear-gradient(135deg,#6C63FF,#00D4FF);
-      border:none;border-radius:10px;color:#fff;font-size:13px;font-weight:700;
-      cursor:pointer;font-family:inherit;letter-spacing:1px
-    ">📩 Contact Admin to Activate</button>
-  </div>
-</div>
 
 <!-- ═══ TOAST ═══ -->
 <div id="abToastWrap" class="ab-toast-wrap"></div>
@@ -154,21 +235,16 @@
   <div class="kp-gate-inner">
     <div class="kp-gate-logo">KINGPIN</div>
     <div class="kp-gate-sub">AUTO BET ENGINE 3.0</div>
-
     <div class="kp-input-label">PHONE</div>
-    <input type="tel" id="abPhone" placeholder="Phone number" autocomplete="off" style="margin-bottom:10px" />
-
+    <input type="tel" id="abPhone" placeholder="Phone number" autocomplete="off" style="margin-bottom:10px"/>
     <div class="kp-input-label">PASSWORD</div>
-    <input type="password" id="abPwd" placeholder="Password" autocomplete="off" />
-
+    <input type="password" id="abPwd" placeholder="Password" autocomplete="off"/>
     <div id="abLoginStatus" class="status-msg" style="margin:10px 0;min-height:18px"></div>
-
     <button class="kp-btn-main" id="abBtnCaptcha" style="margin-bottom:10px">🔑 GET CAPTCHA</button>
-
     <div id="abCaptchaSection" style="display:none">
       <div class="captcha-box">
-        <img id="abCaptchaBg" class="captcha-bg" />
-        <img id="abCaptchaPiece" class="captcha-piece" />
+        <img id="abCaptchaBg" class="captcha-bg"/>
+        <img id="abCaptchaPiece" class="captcha-piece"/>
       </div>
       <div class="slider-wrap">
         <div class="slider-track" id="abSliderTrack">
@@ -178,40 +254,28 @@
       <div id="abCaptchaStatus" class="status-msg"></div>
       <button class="kp-btn-main" id="abBtnLogin" style="margin-top:8px">▶ LOGIN</button>
     </div>
-
-    <!-- Back to dashboard (visible when already have accounts) -->
     <button class="kp-sec-btn" id="abBtnBackToDash" style="display:none;margin-top:12px;width:100%">← Back to Dashboard</button>
   </div>
 </div>
 
 <!-- ═══ DASHBOARD ═══ -->
 <div id="abDashboard" style="display:none">
-
-  <!-- HEADER -->
   <header class="kp-header">
-    <div class="kp-brand">
-      <span class="kp-brand-text">♠ KINGPIN</span>
-      <span class="kp-brand-ver">3.0</span>
-    </div>
+    <div class="kp-brand"><span class="kp-brand-text">♠ KINGPIN</span><span class="kp-brand-ver">3.0</span></div>
     <div class="kp-header-spacer"></div>
     <div class="kp-balance" id="abBalance">₹—</div>
     <div class="ab-engine-pill" id="abEngine">STOPPED</div>
-    <button class="kp-btn-logout" id="abBtnLogout" title="Logout this account">⏻</button>
+    <button class="kp-btn-logout" id="abBtnLogout" title="Logout">⏻</button>
   </header>
 
-  <!-- ACCOUNTS BAR -->
   <div class="kp-accounts-bar" id="abAccountsBar">
     <div class="kp-acct-tabs" id="abAcctTabs"></div>
     <button class="kp-acct-add" id="abBtnAddAcct" title="Add Account" style="display:none">＋</button>
   </div>
 
-  <!-- TWO COLUMN GRID -->
   <div class="kp-grid">
-
-    <!-- ══════ LEFT COLUMN ══════ -->
-    <div class="kp-col-left">
-
-      <!-- Hero -->
+    <!-- LEFT -->
+    <div>
       <div class="kp-hero">
         <div class="kp-hero-top">
           <span class="kp-hero-label">🔮 PREDICTION</span>
@@ -223,14 +287,11 @@
           <div class="kp-conf-bar"><div class="kp-conf-fill" id="abConfFill" style="width:0%"></div></div>
           <span class="kp-conf-pct" id="abConfPct">—%</span>
         </div>
-        <div class="kp-hero-cd-row">
-          <span class="kp-hero-cd" id="abCD">--s</span>
-        </div>
+        <div class="kp-hero-cd-row"><span class="kp-hero-cd" id="abCD">--s</span></div>
         <div class="kp-hero-subs" id="abHeroSubs"></div>
         <div class="kp-hero-bar"><div class="kp-hero-bar-fill" id="abHeroBar"></div></div>
       </div>
 
-      <!-- Controls -->
       <div class="kp-ctrl">
         <div class="kp-controls-row">
           <div class="kp-engine-btns">
@@ -238,21 +299,20 @@
             <button class="kp-btn-eng kp-btn-stop" id="abBtnStop" style="display:none">■ STOP</button>
           </div>
           <div class="kp-ctrl-actions">
-            <button class="kp-sec-btn btn-danger" id="abBtnClearStats" title="Reset Stats">Reset</button>
+            <button class="kp-sec-btn btn-danger" id="abBtnClearStats">Reset</button>
           </div>
         </div>
         <div class="kp-mini-stats">
           <div class="kp-ms"><div class="kp-ms-l">BETS</div><div class="kp-ms-v ab-stat-val" id="abBetsCount">0</div></div>
           <div class="kp-ms"><div class="kp-ms-l">W / L</div><div class="kp-ms-v ab-stat-val" id="abWL">0 / 0</div></div>
-          <div class="kp-ms"><div class="kp-ms-l">P&amp;L</div><div class="kp-ms-v ab-stat-val vg" id="abPnl">₹0</div></div>
+          <div class="kp-ms"><div class="kp-ms-l">P&L</div><div class="kp-ms-v ab-stat-val vg" id="abPnl">₹0</div></div>
           <div class="kp-ms"><div class="kp-ms-l">LEVEL</div><div class="kp-ms-v ab-stat-val" id="abLvl">LV1</div></div>
           <div class="kp-ms"><div class="kp-ms-l">HIGH</div><div class="kp-ms-v ab-stat-val" id="abHighLvl">LV1</div></div>
           <div class="kp-ms"><div class="kp-ms-l">TIME</div><div class="kp-ms-v" id="abSessionTime" style="font-family:var(--mono);font-size:11px">00:00:00</div></div>
         </div>
       </div>
 
-      <!-- Bet Status -->
-      <div class="ab-bet-status s-idle" id="abBetStatus" style="display:none">
+      <div class="ab-bet-status" id="abBetStatus" style="display:none">
         <span class="kp-bs-icon" id="abBsIcon">⏳</span>
         <div style="flex:1;min-width:0">
           <div class="kp-bs-label" id="abBsLabel">READY</div>
@@ -262,30 +322,25 @@
         <div class="kp-bs-bar"><div class="kp-bs-bar-fill" id="abBsBar" style="width:0%"></div></div>
       </div>
 
-      <!-- Max Level Banner -->
       <div class="ab-maxlvl-banner" id="abMaxLvlBanner" style="display:none">
         <div class="banner-title">🚨 BETTING STOPPED</div>
         <div class="banner-msg" id="abMaxLvlMsg">All levels exhausted.</div>
       </div>
 
-      <!-- Activity Log -->
       <div class="kp-card" id="secLog">
         <div class="kp-card-head" onclick="this.parentElement.classList.toggle('collapsed')">
           <div class="kp-card-title"><span class="icon">📋</span> ACTIVITY LOG</div>
           <div style="display:flex;align-items:center;gap:6px">
             <div class="kp-sec-actions" onclick="event.stopPropagation()">
-              <button class="kp-sec-btn btn-danger" id="abBtnClearLog" title="Clear Log">Clear</button>
+              <button class="kp-sec-btn btn-danger" id="abBtnClearLog">Clear</button>
             </div>
             <span class="kp-chevron">▼</span>
           </div>
         </div>
-        <div class="kp-card-body p0">
-          <div class="kp-log" id="abLog" style="padding:10px 14px"></div>
-        </div>
+        <div class="kp-card-body p0"><div class="kp-log" id="abLog" style="padding:10px 14px"></div></div>
       </div>
 
-      <!-- Prediction History -->
-      <div class="kp-card collapsed" id="secPredHistory" style="border-color:var(--cyan)">
+      <div class="kp-card collapsed" id="secPredHistory">
         <div class="kp-card-head" onclick="this.parentElement.classList.toggle('collapsed')">
           <div class="kp-card-title"><span class="icon">🔮</span> PREDICTION HISTORY</div>
           <span class="kp-chevron">▼</span>
@@ -293,25 +348,22 @@
         <div class="kp-card-body p0">
           <div class="kp-tbl-scroll">
             <table class="ab-history-table">
-              <thead><tr><th>#</th><th>Period</th><th>Formula</th><th>Pred</th><th>Result</th><th>✓</th></tr></thead>
+              <thead><tr><th>#</th><th>Period</th><th>Pred</th><th>Result</th><th>✓</th></tr></thead>
               <tbody id="abPredHistBody"></tbody>
             </table>
           </div>
           <div class="ab-history-empty" id="abPredHistEmpty">No predictions yet</div>
           <div class="kp-pager" id="abPredHistPager" style="display:none">
             <button class="kp-pg-btn" id="abPredHistPrev">◀</button>
-            <span class="kp-pg-info" id="abPredHistPageInfo">1 / 1</span>
+            <span class="kp-pg-info" id="abPredHistPageInfo">1/1</span>
             <button class="kp-pg-btn" id="abPredHistNext">▶</button>
           </div>
         </div>
       </div>
+    </div>
 
-    </div><!-- /left -->
-
-    <!-- ══════ RIGHT COLUMN ══════ -->
-    <div class="kp-col-right">
-
-      <!-- Config -->
+    <!-- RIGHT -->
+    <div>
       <div class="kp-card" id="secConfig">
         <div class="kp-card-head" onclick="this.parentElement.classList.toggle('collapsed')">
           <div class="kp-card-title"><span class="icon">⚙️</span> CONFIGURATION</div>
@@ -319,21 +371,15 @@
         </div>
         <div class="kp-card-body">
           <div class="kp-config-row">
-            <div class="kp-config-field">
-              <label>BASE AMOUNT (₹)</label>
-              <input type="number" id="abBaseAmt" min="1" max="10000" value="2" step="1" />
-            </div>
-            <div class="kp-config-field">
-              <label>MAX LEVEL</label>
-              <input type="number" id="abMaxLvl" min="1" max="15" value="10" step="1" />
-            </div>
+            <div class="kp-config-field"><label>BASE AMOUNT (₹)</label><input type="number" id="abBaseAmt" min="1" max="10000" value="2" step="1"/></div>
+            <div class="kp-config-field"><label>MAX LEVEL</label><input type="number" id="abMaxLvl" min="1" max="15" value="10" step="1"/></div>
           </div>
           <div class="kp-config-preview" id="abConfigPreview">—</div>
           <div class="kp-divider"></div>
           <div class="kp-formula-label">🧠 PREDICTION ENGINE</div>
-          <div class="kp-formula-active" id="abFormulaActive" style="cursor:pointer">
-            <span id="abFormulaName">⚡ Shadow Adaptive v14.0</span>
-            <span id="abBtnFormulaPopup" style="font-size:10px;color:#4ade80;letter-spacing:.06em;cursor:pointer">Change ▸</span>
+          <div class="kp-formula-active">
+            <span>⚡ Shadow Adaptive v14.0</span>
+            <span style="font-size:10px;color:#4ade80;letter-spacing:.06em">ACTIVE ●</span>
           </div>
           <div style="margin-top:6px;padding:8px 10px;background:rgba(74,222,128,0.04);border:1px solid rgba(74,222,128,0.15);border-radius:8px;font-size:9px;color:#555577;line-height:1.5">
             8-Strategy Voting · Anti-Streak · Zigzag · FreqBias · DblPair · Mirror · Momentum · Triple · Trend30<br/>
@@ -341,28 +387,19 @@
           </div>
           <div class="kp-watch-row">
             <div style="flex:1">
-              <div class="kp-watch-title">👁️ Watch
-                <input type="number" id="abWatchCount" class="ab-watch-count" min="1" max="10" value="1" />
-                Loss, Then Bet
-              </div>
-              <div class="kp-watch-desc" id="abWatchDesc">Observes virtually, starts real betting after wrong prediction(s).</div>
+              <div class="kp-watch-title">👁️ Watch <input type="number" id="abWatchCount" class="ab-watch-count" min="1" max="10" value="1"/> Loss, Then Bet</div>
+              <div class="kp-watch-desc">Observes first, starts real betting after set losses.</div>
             </div>
-            <label class="kp-toggle">
-              <input type="checkbox" id="abWatchToggle" />
-              <span class="kp-toggle-slider"></span>
-            </label>
+            <label class="kp-toggle"><input type="checkbox" id="abWatchToggle"/><span class="kp-toggle-slider"></span></label>
           </div>
         </div>
       </div>
 
-      <!-- Martingale Levels -->
       <div class="kp-card" id="secLevels">
         <div class="kp-card-head" onclick="this.parentElement.classList.toggle('collapsed')">
           <div class="kp-card-title"><span class="icon">📊</span> MARTINGALE LEVELS</div>
           <div style="display:flex;align-items:center;gap:6px">
-            <label class="kp-edit-toggle" onclick="event.stopPropagation()">
-              <input type="checkbox" id="abEditToggle" /> ✏️ Edit
-            </label>
+            <label class="kp-edit-toggle" onclick="event.stopPropagation()"><input type="checkbox" id="abEditToggle"/> ✏️ Edit</label>
             <span class="kp-chevron">▼</span>
           </div>
         </div>
@@ -372,7 +409,6 @@
         </div>
       </div>
 
-      <!-- Bot Bet History -->
       <div class="kp-card collapsed" id="secBetHistory">
         <div class="kp-card-head" onclick="this.parentElement.classList.toggle('collapsed')">
           <div class="kp-card-title"><span class="icon">🎰</span> BET HISTORY</div>
@@ -381,1383 +417,810 @@
         <div class="kp-card-body p0">
           <div class="kp-tbl-scroll">
             <table class="ab-history-table">
-              <thead><tr><th>#</th><th>Period</th><th>Pred</th><th>LV</th><th>Amt</th><th>Res</th><th>P&amp;L</th></tr></thead>
+              <thead><tr><th>#</th><th>Period</th><th>Pred</th><th>LV</th><th>Amt</th><th>Res</th><th>P&L</th></tr></thead>
               <tbody id="abHistoryBody"></tbody>
             </table>
           </div>
           <div class="ab-history-empty" id="abHistoryEmpty">No bets placed yet</div>
           <div class="kp-pager" id="abBetHistPager" style="display:none">
             <button class="kp-pg-btn" id="abBetHistPrev">◀</button>
-            <span class="kp-pg-info" id="abBetHistPageInfo">1 / 1</span>
+            <span class="kp-pg-info" id="abBetHistPageInfo">1/1</span>
             <button class="kp-pg-btn" id="abBetHistNext">▶</button>
           </div>
         </div>
       </div>
 
-      <!-- My Bet Record -->
       <div class="kp-card collapsed" id="secBetRecord">
         <div class="kp-card-head" onclick="this.parentElement.classList.toggle('collapsed')">
           <div class="kp-card-title"><span class="icon">💰</span> MY BET RECORD</div>
           <div style="display:flex;align-items:center;gap:6px">
             <div class="kp-sec-actions" onclick="event.stopPropagation()">
-              <button class="kp-sec-btn" id="abBtnRefreshBR" title="Refresh">Refresh</button>
+              <button class="kp-sec-btn" id="abBtnRefreshBR">Refresh</button>
             </div>
             <span class="kp-chevron">▼</span>
           </div>
         </div>
         <div class="kp-card-body p0">
-          <div id="abBetRecordList" class="kp-bet-list">
-            <div class="kp-empty">Click Refresh to load</div>
-          </div>
+          <div id="abBetRecordList" class="kp-bet-list"><div class="kp-empty">Click Refresh to load</div></div>
           <div class="kp-pager">
             <button class="kp-pg-btn" id="abBetRecordPrev">◀</button>
-            <span class="kp-pg-info" id="abBetRecordPageInfo">1 / 1</span>
+            <span class="kp-pg-info" id="abBetRecordPageInfo">1/1</span>
             <button class="kp-pg-btn" id="abBetRecordNext">▶</button>
           </div>
         </div>
       </div>
-
-    </div><!-- /right -->
-
+    </div>
   </div><!-- /grid -->
-
-  <!-- ═══ HISTORY EXPORT ═══ -->
-  <div class="kp-card collapsed" id="secExport" style="margin:12px 16px 0">
-    <div class="kp-card-head" onclick="this.parentElement.classList.toggle('collapsed')">
-      <div class="kp-card-title"><span class="icon">📥</span> GAME HISTORY EXPORT</div>
-      <span class="kp-chevron">▼</span>
-    </div>
-    <div class="kp-card-body">
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px">
-        <div style="flex:1;min-width:100px">
-          <label style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:4px">Records</label>
-          <input type="number" id="expRecords" value="500" min="10" max="500" step="10" style="width:100%;padding:7px 10px;background:var(--bg2,#1a1a2e);border:1px solid var(--border,#2a2a45);border-radius:6px;color:var(--text,#e0e0f0);font-size:12px" />
-        </div>
-        <div style="flex:1;min-width:100px">
-          <label style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:4px">Game</label>
-          <input type="text" id="expGame" value="WinGo_30S" style="width:100%;padding:7px 10px;background:var(--bg2,#1a1a2e);border:1px solid var(--border,#2a2a45);border-radius:6px;color:var(--text,#e0e0f0);font-size:12px" />
-        </div>
-        <div style="display:flex;gap:6px;align-self:flex-end;padding-bottom:1px">
-          <button id="expBtnFetch" onclick="startHistoryExport()" style="padding:8px 18px;background:linear-gradient(135deg,#7c3aed,#4f46e5);border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">⚡ Fetch</button>
-          <button id="expBtnDownload" onclick="downloadHistoryCSV()" style="padding:8px 18px;background:linear-gradient(135deg,#059669,#065f46);border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;display:none;white-space:nowrap">⬇ CSV</button>
-        </div>
-      </div>
-      <div id="expProgress" style="display:none;margin-bottom:8px">
-        <div style="background:#1a1a2e;border-radius:999px;height:6px;overflow:hidden">
-          <div id="expBar" style="height:100%;background:linear-gradient(90deg,#7c3aed,#06b6d4);border-radius:999px;transition:width .3s;width:0%"></div>
-        </div>
-        <div id="expProgressText" style="font-size:11px;color:var(--muted,#555577);text-align:center;margin-top:4px">—</div>
-      </div>
-      <div id="expLog" style="background:#0a0a14;border:1px solid #1e1e35;border-radius:6px;padding:8px 10px;font-size:11px;color:#6677aa;max-height:120px;overflow-y:auto;display:none;font-family:monospace"></div>
-      <div id="expStats" style="display:none;margin-top:10px;display:none">
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px" id="expStatsGrid"></div>
-      </div>
-    </div>
-  </div><!-- /secExport -->
-
 </div><!-- /dashboard -->
 
 
-<!-- Formula popup removed — Shadow Adaptive Engine v14.0 is the single fixed engine -->
-
-<!-- ═══ Formula Selection Popup ═══ -->
-<div id="abFormulaPopup" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);align-items:center;justify-content:center;padding:16px">
-  <div style="background:#0d0d1a;border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:18px;max-width:420px;width:100%;max-height:80vh;overflow-y:auto">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;font-weight:700;color:#e0e0ff;font-size:14px">
-      🧠 SELECT FORMULA
-      <button id="abBtnFormulaClose" style="background:none;border:none;color:#888;font-size:22px;cursor:pointer;line-height:1">&times;</button>
-    </div>
-    <div id="abFormulaGrid"></div>
-  </div>
-</div>
-
-<!-- ═══ Socket.IO Client ═══ -->
-<script src="/socket.io.min.js"></script>
-
-<!-- ═══ MULTI-ACCOUNT LOGIN + DASHBOARD LOGIC ═══ -->
+<!-- ═══ BETTING ENGINE (No-Server, Browser-Native) ═══ -->
 <script>
 (function(){
-  'use strict';
+'use strict';
 
-  /* ═══ Multi-Account State ═══ */
-  var accounts = [];        // [{ phone, lotteryToken, webapiToken }]
-  var currentView = null;   // phone of the account currently displayed
-
-  var FORMULAS = {
-    kingpin3: { name: '👑 KINGPIN 3.0',     desc: 'Last 2 numbers → 4 modular candidate formulas, majority BIG/SMALL vote (tie→BIG)', tags: ['KINGPIN', 'Modular', '4-Vote'] },
-    zigzag:   { name: '⚡ ZigZag',          desc: 'Pure BIG↔SMALL toggle — opposite of last result, flips every period', tags: ['ZigZag', 'Toggle'] },
-    oracle:   { name: '🔮 ORACLE',          desc: 'Last-10 mean reversion: ratio>65% BIG→SMALL, ratio<35%→BIG, else ZigZag', tags: ['Adaptive', 'Mean-Reversion'] },
-    kaala:    { name: '🕶️ Kaala',           desc: 'Streak detector (last 18): 4+ same → reverse, else ORACLE fallback', tags: ['Kaala', 'Streak'] },
-    titan_v3: { name: '⚡ TITAN v3',        desc: '3-loss recovery flip, else ORACLE fallback', tags: ['TITAN', 'Recovery'] },
-    dna3:     { name: '🧬 DNA 3',           desc: '3-result triplet pattern lookup table, else ZigZag fallback', tags: ['DNA', 'Pattern'] },
-    FHaa:     { name: '🔁 FHaa (GRR Loop)', desc: 'GREEN → RED → RED → repeat loop. Level 8 (7+ losses) → OPPOSITE prediction', tags: ['GRR', 'Loop', 'Level8-Flip'] },
-  };
-
-  function renderFormulaGrid(currentFormula) {
-    var grid = document.getElementById('abFormulaGrid');
-    if (!grid) return;
-    grid.innerHTML = '';
-    Object.keys(FORMULAS).forEach(function(key) {
-      var f = FORMULAS[key];
-      var card = document.createElement('div');
-      card.className = 'ab-formula-card' + (key === currentFormula ? ' selected' : '');
-      card.style.cssText = 'background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px;margin-bottom:8px;cursor:pointer;transition:.2s';
-      if (key === currentFormula) card.style.borderColor = '#4ade80';
-      card.innerHTML = '<div style="font-weight:700;font-size:13px;color:#e0e0ff;margin-bottom:4px">' + f.name + '</div>'
-        + '<div style="font-size:10px;color:#888;line-height:1.4;margin-bottom:6px">' + f.desc + '</div>'
-        + '<div>' + f.tags.map(function(t) { return '<span style="display:inline-block;background:rgba(74,222,128,0.1);color:#4ade80;font-size:8px;padding:2px 6px;border-radius:4px;margin-right:4px">' + t + '</span>'; }).join('') + '</div>';
-      card.onclick = function() {
-        if (socket && currentView) socket.emit('setFormula', { phone: currentView, formula: key });
-        var popup = document.getElementById('abFormulaPopup');
-        if (popup) popup.style.display = 'none';
-      };
-      grid.appendChild(card);
-    });
+// ── MD5 ───────────────────────────────────────────────
+function md5(str){
+  function safeAdd(x,y){var l=(x&0xFFFF)+(y&0xFFFF);return((x>>16)+(y>>16)+(l>>16)<<16)|(l&0xFFFF)}
+  function rol(n,c){return(n<<c)|(n>>>(32-c))}
+  function cmn(q,a,b,x,s,t){return safeAdd(rol(safeAdd(safeAdd(a,q),safeAdd(x,t)),s),b)}
+  function ff(a,b,c,d,x,s,t){return cmn((b&c)|((~b)&d),a,b,x,s,t)}
+  function gg(a,b,c,d,x,s,t){return cmn((b&d)|(c&(~d)),a,b,x,s,t)}
+  function hh(a,b,c,d,x,s,t){return cmn(b^c^d,a,b,x,s,t)}
+  function ii(a,b,c,d,x,s,t){return cmn(c^(b|(~d)),a,b,x,s,t)}
+  function s2b(s){var b=[];for(var i=0;i<s.length*8;i+=8)b[i>>5]|=(s.charCodeAt(i/8)&255)<<(i%32);return b}
+  function b2h(b){var h='0123456789abcdef',s='';for(var i=0;i<b.length*4;i++)s+=h[(b[i>>2]>>((i%4)*8+4))&0xF]+h[(b[i>>2]>>((i%4)*8))&0xF];return s}
+  function core(x,len){
+    x[len>>5]|=0x80<<(len%32);x[(((len+64)>>>9)<<4)+14]=len;
+    var a=1732584193,b=-271733879,c=-1732584194,d=271733878;
+    for(var i=0;i<x.length;i+=16){var oa=a,ob=b,oc=c,od=d;
+      a=ff(a,b,c,d,x[i],7,-680876936);d=ff(d,a,b,c,x[i+1],12,-389564586);c=ff(c,d,a,b,x[i+2],17,606105819);b=ff(b,c,d,a,x[i+3],22,-1044525330);
+      a=ff(a,b,c,d,x[i+4],7,-176418897);d=ff(d,a,b,c,x[i+5],12,1200080426);c=ff(c,d,a,b,x[i+6],17,-1473231341);b=ff(b,c,d,a,x[i+7],22,-45705983);
+      a=ff(a,b,c,d,x[i+8],7,1770035416);d=ff(d,a,b,c,x[i+9],12,-1958414417);c=ff(c,d,a,b,x[i+10],17,-42063);b=ff(b,c,d,a,x[i+11],22,-1990404162);
+      a=ff(a,b,c,d,x[i+12],7,1804603682);d=ff(d,a,b,c,x[i+13],12,-40341101);c=ff(c,d,a,b,x[i+14],17,-1502002290);b=ff(b,c,d,a,x[i+15],22,1236535329);
+      a=gg(a,b,c,d,x[i+1],5,-165796510);d=gg(d,a,b,c,x[i+6],9,-1069501632);c=gg(c,d,a,b,x[i+11],14,643717713);b=gg(b,c,d,a,x[i],20,-373897302);
+      a=gg(a,b,c,d,x[i+5],5,-701558691);d=gg(d,a,b,c,x[i+10],9,38016083);c=gg(c,d,a,b,x[i+15],14,-660478335);b=gg(b,c,d,a,x[i+4],20,-405537848);
+      a=gg(a,b,c,d,x[i+9],5,568446438);d=gg(d,a,b,c,x[i+14],9,-1019803690);c=gg(c,d,a,b,x[i+3],14,-187363961);b=gg(b,c,d,a,x[i+8],20,1163531501);
+      a=gg(a,b,c,d,x[i+13],5,-1444681467);d=gg(d,a,b,c,x[i+2],9,-51403784);c=gg(c,d,a,b,x[i+7],14,1735328473);b=gg(b,c,d,a,x[i+12],20,-1926607734);
+      a=hh(a,b,c,d,x[i+5],4,-378558);d=hh(d,a,b,c,x[i+8],11,-2022574463);c=hh(c,d,a,b,x[i+11],16,1839030562);b=hh(b,c,d,a,x[i+14],23,-35309556);
+      a=hh(a,b,c,d,x[i+1],4,-1530992060);d=hh(d,a,b,c,x[i+4],11,1272893353);c=hh(c,d,a,b,x[i+7],16,-155497632);b=hh(b,c,d,a,x[i+10],23,-1094730640);
+      a=hh(a,b,c,d,x[i+13],4,681279174);d=hh(d,a,b,c,x[i],11,-358537222);c=hh(c,d,a,b,x[i+3],16,-722521979);b=hh(b,c,d,a,x[i+6],23,76029189);
+      a=hh(a,b,c,d,x[i+9],4,-640364487);d=hh(d,a,b,c,x[i+12],11,-421815835);c=hh(c,d,a,b,x[i+15],16,530742520);b=hh(b,c,d,a,x[i+2],23,-995338651);
+      a=ii(a,b,c,d,x[i],6,-198630844);d=ii(d,a,b,c,x[i+7],10,1126891415);c=ii(c,d,a,b,x[i+14],15,-1416354905);b=ii(b,c,d,a,x[i+5],21,-57434055);
+      a=ii(a,b,c,d,x[i+12],6,1700485571);d=ii(d,a,b,c,x[i+3],10,-1894986606);c=ii(c,d,a,b,x[i+10],15,-1051523);b=ii(b,c,d,a,x[i+1],21,-2054922799);
+      a=ii(a,b,c,d,x[i+8],6,1873313359);d=ii(d,a,b,c,x[i+15],10,-30611744);c=ii(c,d,a,b,x[i+6],15,-1560198380);b=ii(b,c,d,a,x[i+13],21,1309151649);
+      a=ii(a,b,c,d,x[i+4],6,-145523070);d=ii(d,a,b,c,x[i+11],10,-1120210379);c=ii(c,d,a,b,x[i+2],15,718787259);b=ii(b,c,d,a,x[i+9],21,-343485551);
+      a=safeAdd(a,oa);b=safeAdd(b,ob);c=safeAdd(c,oc);d=safeAdd(d,od);}
+    return[a,b,c,d];
   }
-  var captchaId    = null;
-  var sliderX      = 0;
-  var trackData    = [];
-  var trackStart   = '';
-  var dragging     = false;
-  var deviceId     = 'kp3_' + Math.random().toString(36).slice(2, 10);
-  var socket       = null;
-  var betRecordPage = 1;
-  var betRecordLoaded = false;
+  var enc=unescape(encodeURIComponent(str)),bin=s2b(enc);
+  return b2h(core(bin,enc.length*8));
+}
 
-  /* ═══ Firebase Access State ═══ */
-  var kpLastPnl        = 0;
+// ── GOA signing ───────────────────────────────────────
+var EXCL=['signature','track','xosoBettingData'];
+function mkRand(){return'xxxxxxxxxxxx4xxxyxxxxxxxxxxxxxxx'.replace(/[xy]/g,function(c){var r=Math.random()*16|0;return(c==='x'?r:(r&0x3)|0x8).toString(16)})}
+function sign(raw){
+  var en=Object.assign({language:0,random:mkRand()},raw);
+  var sorted=Object.keys(en).sort(),filtered={};
+  sorted.forEach(function(k){var v=en[k];if(v!==null&&v!==''&&!EXCL.includes(k))filtered[k]=v===0?0:v;});
+  en.signature=md5(JSON.stringify(filtered)).toUpperCase().slice(0,32);
+  en.timestamp=Math.floor(Date.now()/1000);
+  return en;
+}
 
-  /* ═══ Persistence ═══ */
-  function saveAccounts() {
-    sessionStorage.setItem('kp_accounts', JSON.stringify(accounts));
-    sessionStorage.setItem('kp_current_view', currentView || '');
+// ── CORS Proxy pool ───────────────────────────────────
+var PROXIES=['https://corsproxy.io/?','https://api.allorigins.win/raw?url='];
+var GOA_BASES=['https://api.goa7777.com','https://api.ar-lottery01.com','https://api.goagamea.com'];
+var GOA_API='https://api.goa7777.com/api/webapi';
+var PUB_HIST='https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json';
+var TYPE_ID=30;
+
+var GOA_HDR={'User-Agent':'Mozilla/5.0 (Linux; Android 12; SM-G991B) AppleWebKit/537.36 Chrome/120.0.6099.230 Mobile Safari/537.36','Accept':'application/json, */*','Accept-Language':'en-US,en;q=0.9','Origin':'https://goagamea.com','Referer':'https://goagamea.com/','Content-Type':'application/json'};
+
+async function proxyPost(url,body,hdrs,timeout){
+  timeout=timeout||10000;
+  hdrs=hdrs||{'Content-Type':'application/json','Accept':'application/json'};
+  for(var pi=0;pi<PROXIES.length;pi++){
+    try{
+      var resp=await fetch(PROXIES[pi]+encodeURIComponent(url),{method:'POST',headers:hdrs,body:JSON.stringify(body),signal:AbortSignal.timeout(timeout)});
+      if(!resp.ok)continue;
+      var j=await resp.json();
+      if(j&&j.contents){try{j=JSON.parse(j.contents);}catch(e){}}
+      if(j&&typeof j.code!=='undefined')return j;
+      if(j)return j;
+    }catch(e){}
   }
-  function loadAccounts() {
-    try { accounts = JSON.parse(sessionStorage.getItem('kp_accounts') || '[]'); } catch(e) { accounts = []; }
-    currentView = sessionStorage.getItem('kp_current_view') || null;
-  }
-  loadAccounts();
+  throw new Error('All proxies failed for '+url);
+}
 
-  /* PRO access now comes from Firebase (window.KP_PRO_ACCESS), set by the
-     device-gate script in <head>. PRO devices can manage multiple accounts;
-     regular devices are limited to one. */
-  function kpGetIsDefault() { return window.KP_PRO_ACCESS === true; }
+// ── GOA API helpers ───────────────────────────────────
+async function goaPost(path,body,token){
+  var signed=sign(body||{});
+  var hdrs=Object.assign({},GOA_HDR);
+  if(token){hdrs['token']=token;hdrs['Authorization']='Bearer '+token;}
+  return proxyPost(GOA_API+path,signed,hdrs,12000);
+}
 
-  var kpIsDefault = kpGetIsDefault();
-
-  /* Apply super-user vs regular-user UI restrictions.
-     Called once at load and again after the Firebase gate resolves. */
-  function applyKeyPermissions() {
-    kpIsDefault = kpGetIsDefault();
-
-    if (!kpIsDefault) {
-      /* Remove from DOM entirely — not just hidden, completely gone */
-      var addBtn  = document.getElementById('abBtnAddAcct');
-      var acctBar = document.getElementById('abAccountsBar');
-      if (addBtn)  addBtn.remove();
-      if (acctBar) acctBar.remove();
-      if (accounts.length > 1) { accounts = accounts.slice(0, 1); saveAccounts(); }
+// ── Balance fetch (tries all bases, picks largest value) ──
+async function fetchBalance(token){
+  if(!token)return -1;
+  var hdrs={'Content-Type':'application/json','Accept':'application/json'};
+  for(var bi=0;bi<GOA_BASES.length;bi++){
+    for(var pi=0;pi<PROXIES.length;pi++){
+      try{
+        var signed=sign({});
+        var url=PROXIES[pi]+encodeURIComponent(GOA_BASES[bi]+'/api/webapi/User/GetInfo');
+        // Pass token in body for proxy compatibility
+        var payload=Object.assign({},signed,{token:token});
+        var resp=await fetch(url,{method:'POST',headers:hdrs,body:JSON.stringify(payload),signal:AbortSignal.timeout(8000)});
+        if(!resp.ok)continue;
+        var j=await resp.json();
+        if(j&&j.contents){try{j=JSON.parse(j.contents);}catch(e){}}
+        if(j&&j.code===0){
+          var d=j.data||{};
+          // Try all known balance fields
+          var cands=[d.balance,d.money,d.wallet,d.mainBalance,d.normalBalance,d.rechargeBalance,d.totalBalance,d.coinBalance,d.amount];
+          if(d.userInfo){cands.push(d.userInfo.balance,d.userInfo.money);}
+          var vals=cands.map(function(v){return parseFloat(String(v||''));}).filter(function(n){return!isNaN(n)&&n>=0;});
+          if(vals.length>0)return Math.max.apply(null,vals);
+        }
+      }catch(e){}
     }
   }
+  return -1;
+}
 
-  /* ═══ DOM Refs ═══ */
-  var $ = function(id) { return document.getElementById(id); };
-  var loginSection  = $('abLoginSection');
-  var dashboard     = $('abDashboard');
-  var phoneEl       = $('abPhone');
-  var pwdEl         = $('abPwd');
-  var statusEl      = $('abLoginStatus');
-  var captchaBtn    = $('abBtnCaptcha');
-  var loginBtn      = $('abBtnLogin');
-  var captchaSec    = $('abCaptchaSection');
+// ── Fetch public results (no auth) ────────────────────
+function parseResults(list){
+  if(!Array.isArray(list))return[];
+  return list.map(function(item){
+    var n=parseInt(String(item.number||item.num||item.openNumber||item.winNumber||''));
+    if(!isNaN(n))return n>=5?'B':'S';
+    var c=String(item.colour||item.color||item.result||'').toLowerCase();
+    return c.includes('big')?'B':'S';
+  });
+}
 
-  function lockPhoneField() {
-    var el = document.getElementById('abPhone');
-    if (!el) return; // DOM not ready yet
-    el.readOnly = false;
-    el.style.opacity = '';
-    el.title = '';
+async function fetchResultsPublic(){
+  var url=PUB_HIST+'?pageNo=1&pageSize=50&gameId=1';
+  // Try direct first
+  try{
+    var r=await fetch(url,{signal:AbortSignal.timeout(5000)});
+    if(r.ok){var j=await r.json();var d=j.data||j;var list=d.list||d.issueList||d.data||j.list||[];if(list.length>=6)return parseResults(list);}
+  }catch(e){}
+  // Try proxies
+  for(var pi=0;pi<PROXIES.length;pi++){
+    try{
+      var pu=PROXIES[pi]+encodeURIComponent(url);
+      var r2=await fetch(pu,{signal:AbortSignal.timeout(8000)});
+      if(!r2.ok)continue;
+      var j2=await r2.json();
+      if(j2&&j2.contents){try{j2=JSON.parse(j2.contents);}catch(e){}}
+      var d2=j2.data||j2;
+      var list2=d2.list||d2.issueList||d2.data||j2.list||[];
+      if(list2.length>=6)return parseResults(list2);
+    }catch(e){}
   }
-  lockPhoneField();
+  return[];
+}
 
-  /* ═══ Helpers ═══ */
-  function status(msg, ok) {
-    statusEl.textContent = msg;
-    statusEl.className = 'status-msg' + (ok ? ' ok' : (ok === false ? ' err' : ''));
-  }
+// ── Current period ────────────────────────────────────
+async function fetchPeriod(token){
+  try{
+    var r=await goaPost('/WinGo/GetCurrentIssue',{typeId:TYPE_ID},token);
+    if(r&&r.code===0){var d=r.data||{};return{period:String(d.issueNumber||d.issue||''),countdown:Number(d.countdown||d.remainTime||d.endTime||0),total:Number(d.totalTime||d.duration||30)};}
+  }catch(e){}
+  return null;
+}
 
-  function toast(title, msg, type) {
-    var wrap = $('abToastWrap');
-    var el = document.createElement('div');
-    el.className = 'ab-toast t-' + (type || 'info');
-    el.innerHTML = '<strong>' + title + '</strong> ' + msg;
-    wrap.appendChild(el);
-    setTimeout(function(){ el.remove(); }, 4000);
-  }
+// ── Place bet ─────────────────────────────────────────
+async function placeBet(token,pred,amt,period){
+  try{
+    var r=await goaPost('/WinGo/WinGoBet',{typeId:TYPE_ID,issueNumber:period,amount:amt,betContent:pred==='B'?'Big':'Small',multiple:1},token);
+    return r&&r.code===0;
+  }catch(e){return false;}
+}
 
-  function showLogin() {
-    loginSection.style.display = '';
-    dashboard.style.display = 'none';
-    $('abBtnBackToDash').style.display = (kpGetIsDefault() && accounts.length > 0) ? '' : 'none';
-    lockPhoneField();
-  }
-
-  function showDashboard() {
-    loginSection.style.display = 'none';
-    dashboard.style.display = '';
-    applyKeyPermissions();
-    connectSocket();
-  }
-
-  function formatPnl(v) {
-    return (v >= 0 ? '+' : '') + '₹' + v.toFixed(2);
-  }
-
-  var _sessionStart = 0;
-
-  function formatTime(ms) {
-    if (ms < 0) ms = 0;
-    var s = Math.floor(ms / 1000);
-    var h = Math.floor(s / 3600); s %= 3600;
-    var m = Math.floor(s / 60); s %= 60;
-    return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
-  }
-
-  /* ═══ Socket.IO Connection ═══ */
-  function connectSocket() {
-    if (socket && socket.connected) {
-      // Re-auth all accounts
-      reAuthAll();
-      return;
+// ── Check result ──────────────────────────────────────
+async function checkResult(token,period,lastPred){
+  try{
+    var r=await goaPost('/WinGo/GetIssueList',{pageNo:1,pageSize:5,typeId:TYPE_ID},token);
+    if(r&&r.code===0){
+      var list=(r.data||{}).list||[];
+      var row=list.find(function(i){return String(i.issueNumber||i.issue)===period;});
+      if(row){var num=parseInt(String(row.number||row.num||0));var result=num>=5?'B':'S';return{result:result,win:result===lastPred};}
     }
-    socket = io({ transports: ['websocket', 'polling'] });
+  }catch(e){}
+  return null;
+}
 
-    socket.on('connect', function() {
-      console.log('[KP] Socket connected via ' + socket.io.engine.transport.name);
-      reAuthAll();
-    });
+// ── Fetch bet record ──────────────────────────────────
+async function fetchBetRecord(token,page){
+  try{return await goaPost('/WinGo/GetMyGameRecordList',{pageNo:page||1,pageSize:20,typeId:TYPE_ID},token);}
+  catch(e){return{code:-1,msg:String(e)};}
+}
 
-    /* ── Full state snapshot (for current view) ── */
-    socket.on('state', function(s) {
-      // Only render if this state is for our current view
-      if (s.phone === currentView) {
-        renderState(s);
+// ── Shadow Adaptive Engine v14.0 ─────────────────────
+function shadowEngine(seq,cLoss){
+  if(seq.length<6)return{pred:'B',conf:50,reason:'Collecting data…',skip:true};
+  var streak=1;for(var i=1;i<seq.length;i++){if(seq[i]===seq[0])streak++;else break;}
+  var opp=seq[0]==='B'?'S':'B';
+  if(streak>=5)return{pred:opp,conf:92,reason:'L2-FIX: '+streak+'x'+seq[0]+' → near-certain reversal',skip:false};
+  if(streak>=4)return{pred:opp,conf:85,reason:'L1-FIX: '+streak+'x'+seq[0]+' → high-prob reversal',skip:false};
+  var V={BIG:0,SMALL:0},R=[];
+  function vote(s,p,l){V[s]+=p;R.push(l+'+'+p+'→'+s);}
+  var oS=seq[0]==='B'?'SMALL':'BIG',sS=seq[0]==='B'?'BIG':'SMALL';
+  if(streak>=3)vote(oS,Math.min(streak*11,44),'AntiStreak('+streak+'x'+seq[0]+')');
+  else if(streak===1)vote(sS,6,'ShortContinue');
+  var h5=seq.slice(0,Math.min(5,seq.length));
+  if(h5.length>=5&&h5.every(function(v,i){return i===0||v!==h5[i-1];}))vote(oS,28,'Zigzag-5');
+  var L10=seq.slice(0,Math.min(10,seq.length)),b10=L10.filter(function(x){return x==='B';}).length,s10=L10.length-b10;
+  if(b10>=7)vote('SMALL',22,'FreqBias(B'+b10+'/10)');else if(s10>=7)vote('BIG',22,'FreqBias(S'+s10+'/10)');else vote(b10>=s10?'BIG':'SMALL',4,'MildDom');
+  if(seq.length>=4&&seq[0]===seq[1]&&seq[2]===seq[3]&&seq[0]!==seq[2])vote(oS,18,'DblPair');
+  if(seq.length>=3&&seq[0]===seq[2]&&seq[0]!==seq[1])vote(seq[1]==='B'?'BIG':'SMALL',14,'Mirror');
+  var b5=h5.filter(function(x){return x==='B';}).length,s5=h5.length-b5;
+  if(b5>=4)vote('SMALL',14,'Mom5(B'+b5+')');else if(s5>=4)vote('BIG',14,'Mom5(S'+s5+')');
+  if(seq.length>=3&&seq[0]===seq[1]&&seq[1]===seq[2])vote(oS,20,'Triple');
+  if(seq.length>=30){var L30=seq.slice(0,30),b30=L30.filter(function(x){return x==='B';}).length,s30=L30.length-b30;if(b30>=19)vote('SMALL',10,'Trend30');else if(s30>=19)vote('BIG',10,'Trend30');}
+  var total=V.BIG+V.SMALL;if(!total)return{pred:'B',conf:50,reason:'No signal',skip:true};
+  var pF=V.BIG>V.SMALL?'BIG':'SMALL',p=pF==='BIG'?'B':'S';
+  var rawC=(V[pF]/total)*100,margin=Math.abs(V.BIG-V.SMALL);
+  var conf=Math.min(95,Math.max(50,rawC)+Math.min(margin*.3,8));
+  conf=Math.round(conf*10)/10;
+  var thr=cLoss>=2?72:63;
+  return{pred:p,conf:conf,reason:'Shadow['+conf+'%] BIG='+V.BIG+' SMALL='+V.SMALL+' | '+R.slice(0,3).join(' | '),skip:conf<thr};
+}
+
+// ── Engine State ──────────────────────────────────────
+var E={
+  token:null,phone:null,engine:'stopped',balance:0,
+  wins:0,losses:0,pnl:0,currentLevel:1,highestLevel:1,sessionStart:0,
+  cfg:{baseAmt:2,maxLevel:10,watchEnabled:false,watchCount:1},
+  levels:[],logs:[],betHistory:[],predHistory:[],
+  lastPred:null,lastConf:0,currentPeriod:null,
+  betPlaced:false,betPeriod:null,watchLossCount:0,watchActive:false,
+  pollTimer:null,lastPeriod:''
+};
+
+function buildLevels(base,max){var l=[],a=base;for(var i=0;i<max;i++){l.push(Math.round(a));a*=2;}return l;}
+function tsNow(){return new Date().toLocaleTimeString('en-IN',{hour12:false});}
+function addLog(type,msg){var e={type:type,msg:msg,ts:Date.now(),t:tsNow(),cls:type};E.logs.unshift(e);if(E.logs.length>200)E.logs.pop();UI.addLogEntry(e);}
+
+// ── Poll Loop ─────────────────────────────────────────
+function startPoll(){
+  if(E.pollTimer)return;
+  E.pollTimer=setInterval(async function(){
+    if(!E.token&&!E.wToken)return;
+    var token=E.token||E.wToken;
+    try{
+      var pd=await fetchPeriod(token);
+      if(!pd)return;
+      var period=pd.period,cd=pd.countdown,total=pd.total;
+      E.currentPeriod=period;
+      UI.updateCountdown(cd,total);
+
+      var changed=period!==E.lastPeriod;
+
+      // Result check
+      if(changed&&E.lastPeriod&&E.betPlaced&&E.lastPred){
+        await new Promise(function(r){setTimeout(r,2500);});
+        var rd=await checkResult(token,E.lastPeriod,E.lastPred);
+        if(rd){
+          var win=rd.win;
+          var predLabel=E.lastPred==='B'?'BIG':'SMALL';
+          var resLabel=rd.result==='B'?'BIG':'SMALL';
+          var amt=E.levels[E.currentLevel-1]||E.cfg.baseAmt;
+          if(win){
+            var pnl=+(amt*0.95).toFixed(2);
+            E.wins++;E.pnl+=pnl;E.currentLevel=1;
+            addLog('success','✅ WIN — '+E.lastPeriod+' | '+predLabel+' | +₹'+pnl.toFixed(2));
+            UI.toast('✅ WIN','+₹'+pnl.toFixed(2),'success');
+            UI.setBetStatus('win','✅','WIN!',predLabel+' +₹'+pnl.toFixed(2),'',0);
+            E.betHistory.unshift({issue:E.lastPeriod,pred:predLabel,level:E.currentLevel,amount:amt,won:true,pnl:pnl});
+          }else{
+            E.losses++;E.pnl-=amt;
+            E.currentLevel=Math.min(E.currentLevel+1,E.levels.length);
+            addLog('error','❌ LOSS — '+E.lastPeriod+' | '+predLabel+' → '+resLabel+' | -₹'+amt);
+            UI.toast('❌ LOSS','-₹'+amt,'error');
+            UI.setBetStatus('loss','❌','LOSS',predLabel+' → '+resLabel+' -₹'+amt,'',0);
+            E.betHistory.unshift({issue:E.lastPeriod,pred:predLabel,level:E.currentLevel,amount:amt,won:false,pnl:-amt});
+          }
+          E.predHistory.unshift({forIssue:E.lastPeriod,pred:predLabel,result:resLabel,correct:win});
+          if(E.betHistory.length>200)E.betHistory.pop();
+          if(E.predHistory.length>200)E.predHistory.pop();
+          if(E.currentLevel>E.highestLevel)E.highestLevel=E.currentLevel;
+          if(E.currentLevel>E.levels.length){E.engine='stopped';UI.showMaxLevel('All martingale levels exhausted.');}
+          // Refresh balance after result
+          fetchBalance(token).then(function(bal){if(bal>=0){E.balance=bal;UI.updateState();}});
+          UI.updateState();UI.renderBetHistory();UI.renderPredHistory();
+        }
+        E.betPlaced=false;E.betPeriod=null;
       }
-      // Auto-load bet record
-      if (!betRecordLoaded && s.loggedIn && s.phone === currentView) {
-        betRecordLoaded = true;
-        socket.emit('getBetRecord', { phone: currentView, page: 1 });
+
+      // New period: predict
+      if(changed){
+        E.lastPeriod=period;
+        if(E.engine==='running'){
+          var hist=await fetchResultsPublic();
+          var r2=shadowEngine(hist,E.losses);
+          E.lastConf=r2.conf;
+          if(r2.skip){
+            E.lastPred=null;
+            addLog('warn','⏸ SKIP — conf too low @ '+period);
+            UI.setBetStatus('watch','⏸','SKIPPED','Confidence below threshold — waiting',cd+'s',0);
+          }else{
+            E.lastPred=r2.pred;
+            addLog('info','🔮 '+period+' — '+(r2.pred==='B'?'BIG':'SMALL')+' | '+r2.reason);
+          }
+          UI.updateState();
+        }
       }
-    });
 
-    /* ── Account list updates ── */
-    socket.on('accountList', function(list) {
-      renderAccountTabs(list);
-    });
-
-    /* ── Account removed ── */
-    socket.on('accountRemoved', function(d) {
-      accounts = accounts.filter(function(a) { return a.phone !== d.phone; });
-      if (currentView === d.phone) {
-        currentView = accounts.length > 0 ? accounts[0].phone : null;
+      // Bet window
+      if(E.engine==='running'&&E.lastPred&&!E.betPlaced&&cd>5&&cd<=20){
+        if(E.cfg.watchEnabled&&E.watchActive){
+          if(E.watchLossCount<E.cfg.watchCount){
+            UI.setBetStatus('watch','👁️','WATCHING','Watch '+E.watchLossCount+'/'+E.cfg.watchCount+' losses',cd+'s',Math.round(cd/total*100));
+          }else{E.watchActive=false;}
+        }
+        if(!E.cfg.watchEnabled||!E.watchActive){
+          var ba=E.levels[E.currentLevel-1]||E.cfg.baseAmt;
+          var pl=E.lastPred==='B'?'BIG':'SMALL';
+          UI.setBetStatus('betting','🎰','BETTING LV'+E.currentLevel,pl+' — ₹'+ba,cd+'s',Math.round(cd/total*100));
+          var ok=await placeBet(token,E.lastPred,ba,period);
+          if(ok){E.betPlaced=true;E.betPeriod=period;addLog('warn','🎯 BET — '+pl+' ₹'+ba+' LV'+E.currentLevel+' @ '+period);}
+          else addLog('error','⚠️ Bet failed @ '+period);
+        }
       }
-      saveAccounts();
-      if (accounts.length === 0) {
-        showLogin();
-      } else if (currentView) {
-        socket.emit('switchView', { phone: currentView });
-      }
-    });
 
-    /* ── Countdown ── */
-    socket.on('countdown', function(d) {
-      $('abCD').textContent = d.secs + 's';
-      var pct = ((d.total - d.secs) / d.total * 100).toFixed(1);
-      $('abHeroBar').style.width = pct + '%';
-    });
+    }catch(ex){addLog('error','🔴 Poll error: '+ex.message);}
+  },3000);
+}
 
-    /* ── Activity log ── */
-    socket.on('log', function(entry) {
-      addLogEntry(entry);
-    });
+// ── UI Controller ─────────────────────────────────────
+var UI = {
+  _=$:function(id){return document.getElementById(id)},
+  $:function(id){return document.getElementById(id)},
 
-    /* ── Bulk logs ── */
-    socket.on('logs', function(entries) {
-      var logEl = $('abLog');
-      logEl.innerHTML = '';
-      (entries || []).forEach(function(e) { addLogEntry(e); });
-    });
-
-    /* ── Toast ── */
-    socket.on('toast', function(d) {
-      toast(d.title, d.msg, d.type);
-    });
-
-    /* ── Bet Status ── */
-    socket.on('betStatus', function(d) {
-      var el = $('abBetStatus');
-      el.style.display = '';
-      el.className = 'ab-bet-status s-' + (d.cls || 'idle');
-      $('abBsIcon').textContent = d.icon || '⏳';
-      $('abBsLabel').textContent = d.label || '';
-      $('abBsDetail').textContent = d.detail || '';
-      $('abBsTimer').textContent = d.timer || '';
-      $('abBsBar').style.width = (d.bar || '0') + '%';
-    });
-
-    /* ── Max Level Banner ── */
-    socket.on('maxLevel', function(d) {
-      var el = $('abMaxLvlBanner');
-      el.style.display = '';
-      $('abMaxLvlMsg').textContent = d.msg || 'All levels exhausted.';
-    });
-
-    /* ── Bet Record ── */
-    socket.on('betRecord', function(d) {
-      renderBetRecord(d);
-    });
-
-    /* ── Export History Result ── */
-    _bindExpHistorySocket();
-
-    /* ── Re-auth: server re-logged in, update stored tokens ── */
-    socket.on('reauth', function(d) {
-      if (!d || !d.phone) return;
-      var acct = accounts.find(function(a) { return a.phone === d.phone; });
-      if (acct) {
-        acct.lotteryToken = d.lotteryToken || acct.lotteryToken;
-        acct.webapiToken  = d.webapiToken  || acct.webapiToken;
-        saveAccounts();
-        toast('🔄 Re-Login', d.phone + ' session refreshed', 'info');
-        console.log('[KP] Reauth for ' + d.phone + ' — tokens updated');
-      }
-    });
-
-    socket.on('disconnect', function() {
-      console.log('[KP] Socket disconnected');
-    });
-  }
-
-  /* ── Re-auth all saved accounts on connect ── */
-  function reAuthAll() {
-    if (!socket) return;
-    accounts.forEach(function(a) {
-      socket.emit('auth', {
-        lotteryToken: a.lotteryToken,
-        webapiToken: a.webapiToken,
-        phone: a.phone,
-        pwd: a.pwd || '',
-      });
-    });
-    // Switch to current view
-    if (currentView) {
-      setTimeout(function() {
-        socket.emit('switchView', { phone: currentView });
-      }, 500);
-    }
-  }
-
-  /* ═══ Account Tabs ═══ */
-  function renderAccountTabs(list) {
-    var tabs = $('abAcctTabs');
-    tabs.innerHTML = '';
-    (list || []).forEach(function(a) {
-      var tab = document.createElement('div');
-      tab.className = 'kp-acct-tab' + (a.phone === currentView ? ' active' : '');
-      tab.setAttribute('data-phone', a.phone);
-
-      var phoneLast4 = a.phone.length > 4 ? '...' + a.phone.slice(-4) : a.phone;
-      var statusCls = 'pill-' + (a.engine || 'stopped');
-
-      tab.innerHTML = '<span class="kp-acct-phone">' + phoneLast4 + '</span>'
-        + '<span class="kp-acct-status ' + statusCls + '">' + (a.engine || 'stopped').toUpperCase() + '</span>'
-        + '<span class="kp-acct-bal">₹' + (a.balance || 0).toFixed(0) + '</span>'
-        + '<span class="kp-acct-pnl ' + ((a.pnl || 0) >= 0 ? 'vg' : 'vr') + '">' + formatPnl(a.pnl || 0) + '</span>';
-
-      tab.addEventListener('click', function() {
-        switchToAccount(a.phone);
-      });
-      tabs.appendChild(tab);
-    });
-  }
-
-  function switchToAccount(phone) {
-    if (currentView === phone) return;
-    currentView = phone;
-    saveAccounts();
-    betRecordLoaded = false;
-    if (socket) socket.emit('switchView', { phone: phone });
-    // Update tab active states
-    var allTabs = document.querySelectorAll('.kp-acct-tab');
-    allTabs.forEach(function(t) {
-      t.classList.toggle('active', t.getAttribute('data-phone') === phone);
-    });
-  }
-
-  /* ═══ Render Full State ═══ */
-  function renderState(s) {
-    if (!s) return;
-
+  updateState:function(){
+    var s=E;
     // Balance
-    $('abBalance').textContent = '₹' + (s.balance || 0).toFixed(2);
-
+    UI.$('abBalance').textContent='₹'+(s.balance>0?s.balance.toFixed(2):'—');
     // Engine pill
-    var pill = $('abEngine');
-    pill.textContent = (s.engine || 'stopped').toUpperCase();
-    pill.className = 'ab-engine-pill pill-' + (s.engine || 'stopped');
-
-    // Start/Stop buttons
-    if (s.engine === 'stopped') {
-      $('abBtnStart').style.display = '';
-      $('abBtnStop').style.display = 'none';
-      $('abBetStatus').style.display = 'none';
-      $('abMaxLvlBanner').style.display = 'none';
-    } else {
-      $('abBtnStart').style.display = 'none';
-      $('abBtnStop').style.display = '';
+    var pill=UI.$('abEngine');
+    pill.textContent=(s.engine||'stopped').toUpperCase();
+    pill.className='ab-engine-pill pill-'+(s.engine||'stopped');
+    // Buttons
+    if(s.engine==='stopped'){
+      UI.$('abBtnStart').style.display='';UI.$('abBtnStop').style.display='none';
+      UI.$('abBetStatus').style.display='none';UI.$('abMaxLvlBanner').style.display='none';
+    }else{
+      UI.$('abBtnStart').style.display='none';UI.$('abBtnStop').style.display='';
     }
-
-    // Mini stats
-    var bets = (s.wins || 0) + (s.losses || 0);
-    $('abBetsCount').textContent = bets;
-    $('abWL').textContent = (s.wins || 0) + ' / ' + (s.losses || 0);
-    var pnlEl = $('abPnl');
-    pnlEl.textContent = formatPnl(s.pnl || 0);
-    pnlEl.className = 'kp-ms-v ab-stat-val ' + ((s.pnl || 0) >= 0 ? 'vg' : 'vr');
-    kpLastPnl = s.pnl || 0;
-    $('abLvl').textContent = 'LV' + (s.level || 1);
-    $('abHighLvl').textContent = 'LV' + (s.highestLevel || 1);
-    if (s.sessionElapsed) {
-      _sessionStart = Date.now() - s.sessionElapsed;
-      $('abSessionTime').textContent = formatTime(Date.now() - _sessionStart);
+    // Stats
+    var bets=(s.wins||0)+(s.losses||0);
+    UI.$('abBetsCount').textContent=bets;
+    UI.$('abWL').textContent=(s.wins||0)+' / '+(s.losses||0);
+    var pEl=UI.$('abPnl');
+    pEl.textContent=(s.pnl>=0?'+':'')+'₹'+(s.pnl||0).toFixed(2);
+    pEl.className='kp-ms-v ab-stat-val '+(s.pnl>=0?'vg':'vr');
+    UI.$('abLvl').textContent='LV'+(s.currentLevel||1);
+    UI.$('abHighLvl').textContent='LV'+(s.highestLevel||1);
+    // Prediction
+    if(s.lastPred){
+      var predEl=UI.$('abPred');
+      var label=s.lastPred==='B'?'BIG':'SMALL';
+      predEl.textContent=label;predEl.className='ab-hero-pred pred-'+label.toLowerCase();
+      UI.$('abPeriod').textContent=s.currentPeriod?'…'+s.currentPeriod.slice(-5):'—';
+      if(s.lastConf>0){
+        UI.$('abConfRow').style.display='flex';
+        var lvl=s.lastConf>=80?'high':s.lastConf>=65?'mid':'low';
+        UI.$('abConfFill').style.width=s.lastConf+'%';
+        UI.$('abConfFill').className='kp-conf-fill '+lvl;
+        UI.$('abConfPct').textContent=s.lastConf+'%';
+        UI.$('abConfPct').className='kp-conf-pct '+lvl;
+      }else{UI.$('abConfRow').style.display='none';}
+    }else{
+      UI.$('abConfRow').style.display='none';
+      UI.$('abPred').textContent='WAIT';UI.$('abPred').className='ab-hero-pred pred-wait';
     }
-
-    // Prediction hero
-    if (s.prediction) {
-      var predEl = $('abPred');
-      var pred = s.prediction.pred || 'WAIT';
-      predEl.textContent = pred;
-      predEl.className = 'ab-hero-pred pred-' + pred.toLowerCase();
-      $('abPeriod').textContent = s.prediction.forIssue ? '...' + s.prediction.forIssue.slice(-5) : '—';
-
-      // Confidence bar
-      var conf = s.prediction.conf || 0;
-      if (conf > 0) {
-        $('abConfRow').style.display = 'flex';
-        var level = conf >= 80 ? 'high' : conf >= 65 ? 'mid' : 'low';
-        $('abConfFill').style.width = conf + '%';
-        $('abConfFill').className = 'kp-conf-fill ' + level;
-        $('abConfPct').textContent = conf + '%';
-        $('abConfPct').className = 'kp-conf-pct ' + level;
-      } else {
-        $('abConfRow').style.display = 'none';
-      }
-
-      var subsEl = $('abHeroSubs');
-      subsEl.innerHTML = '';
-      var rawLog = s.prediction.log || '';
-      var voteRx = /([A-Za-z0-9_-]+):(BIG|SMALL)/gi;
-      var vm, hasVotes = false;
-      while ((vm = voteRx.exec(rawLog)) !== null) {
-        hasVotes = true;
-        var vc = document.createElement('span');
-        vc.className = 'kp-sub-chip ' + vm[2].toLowerCase();
-        vc.textContent = vm[1] + ':' + vm[2].charAt(0);
-        subsEl.appendChild(vc);
-      }
-      if (!hasVotes) {
-        var fc = document.createElement('span');
-        fc.className = 'kp-sub-chip';
-        fc.textContent = s.prediction.formula || s.formula || '—';
-        subsEl.appendChild(fc);
-      }
-    } else {
-      $('abConfRow').style.display = 'none';
-      $('abPred').textContent = 'WAIT';
-      $('abPred').className = 'ab-hero-pred pred-wait';
-    }
-
-    // Config
-    if (s.formulaInfo) {
-      $('abFormulaName').textContent = s.formulaInfo.name || s.formula || '—';
-    }
-    if (s.levels) {
-      if (!editMode) {
-        $('abBaseAmt').value = s.levels[0] || 2;
-        $('abMaxLvl').value = s.levels.length;
-        updateConfigPreview(s.levels);
-        renderLevels(s.levels, s.level || 1);
-      }
-    }
-    if (s.watchEnabled !== undefined) {
-      $('abWatchToggle').checked = s.watchEnabled;
-    }
-    if (s.watchLossTarget !== undefined) {
-      $('abWatchCount').value = s.watchLossTarget;
-    }
-
-    // Bet history
-    if (s.betHistory) {
-      renderBetHistory(s.betHistory);
-    }
-
-    // Prediction history
-    if (s.predHistory) {
-      renderPredHistory(s.predHistory);
-    }
-
     // Disable config when running
-    var running = s.engine !== 'stopped';
-    $('abBaseAmt').disabled = running;
-    $('abMaxLvl').disabled = running;
-    $('abWatchToggle').disabled = running;
-    $('abWatchCount').disabled = running;
-  }
+    var running=s.engine!=='stopped';
+    ['abBaseAmt','abMaxLvl','abWatchToggle','abWatchCount'].forEach(function(id){UI.$(id).disabled=running;});
+  },
 
-  /* ═══ UI Renderers ═══ */
-  function addLogEntry(entry) {
-    var logEl = $('abLog');
-    var div = document.createElement('div');
-    div.className = 'kp-log-line ' + (entry.cls || '');
-    div.innerHTML = '<span class="kp-log-time">' + (entry.t || '') + '</span> ' + entry.msg;
-    logEl.prepend(div);
-    while (logEl.children.length > 50) logEl.removeChild(logEl.lastChild);
-  }
+  updateCountdown:function(secs,total){
+    UI.$('abCD').textContent=secs+'s';
+    var pct=((total-secs)/total*100).toFixed(1);
+    UI.$('abHeroBar').style.width=pct+'%';
+  },
 
-  function updateConfigPreview(levels) {
-    var total = levels.reduce(function(a, b) { return a + b; }, 0);
-    $('abConfigPreview').textContent = 'Total risk: ₹' + total + ' | ' + levels.length + ' levels';
-    $('abLevelsRisk').textContent = 'Total risk: ₹' + total + ' across ' + levels.length + ' levels';
-  }
+  setBetStatus:function(cls,icon,label,detail,timer,bar){
+    var el=UI.$('abBetStatus');el.style.display='';
+    el.className='ab-bet-status s-'+cls;
+    UI.$('abBsIcon').textContent=icon;UI.$('abBsLabel').textContent=label;
+    UI.$('abBsDetail').textContent=detail;UI.$('abBsTimer').textContent=timer;
+    UI.$('abBsBar').style.width=bar+'%';
+  },
 
-  var editMode = false;
-  var lastKnownLevels = null;
-  var lastKnownLevel = 1;
+  showMaxLevel:function(msg){
+    UI.$('abMaxLvlBanner').style.display='';UI.$('abMaxLvlMsg').textContent=msg;
+  },
 
-  function renderLevels(levels, currentLevel) {
-    lastKnownLevels = levels.slice();
-    lastKnownLevel = currentLevel;
-    var el = $('abLevels');
-    el.innerHTML = '';
-    levels.forEach(function(amt, i) {
-      var lv = i + 1;
-      var chip = document.createElement('span');
-      chip.className = 'ab-level-chip';
-      if (lv === currentLevel) chip.classList.add('current');
-      if (lv < currentLevel) chip.classList.add('passed');
-      if (editMode) {
-        chip.innerHTML = 'LV' + lv + ' <input type="number" class="level-input" data-idx="' + i + '" value="' + amt + '" min="1" />';
-      } else {
-        chip.innerHTML = 'LV' + lv + ' ₹' + amt;
-      }
+  addLogEntry:function(e){
+    var log=UI.$('abLog');
+    var div=document.createElement('div');
+    div.className='kp-log-line '+(e.cls||'');
+    div.innerHTML='<span class="kp-log-time">'+(e.t||'')+'</span> '+e.msg;
+    log.prepend(div);
+    while(log.children.length>60)log.removeChild(log.lastChild);
+  },
+
+  toast:function(title,msg,type){
+    var wrap=UI.$('abToastWrap');
+    var el=document.createElement('div');
+    el.className='ab-toast t-'+(type||'info');
+    el.innerHTML='<div class="ab-toast-title">'+title+'</div>'+msg;
+    wrap.appendChild(el);
+    setTimeout(function(){el.style.opacity='0';setTimeout(function(){el.remove();},400);},3500);
+  },
+
+  updateConfigPreview:function(){
+    var total=E.levels.reduce(function(a,b){return a+b;},0);
+    var txt='Total risk: ₹'+total+' | '+E.levels.length+' levels';
+    UI.$('abConfigPreview').textContent=txt;
+    UI.$('abLevelsRisk').textContent='Total risk: ₹'+total+' across '+E.levels.length+' levels';
+  },
+
+  renderLevels:function(){
+    var el=UI.$('abLevels');el.innerHTML='';
+    E.levels.forEach(function(amt,i){
+      var lv=i+1;
+      var chip=document.createElement('span');chip.className='ab-level-chip';
+      if(lv===E.currentLevel)chip.classList.add('current');
+      else if(lv<E.currentLevel)chip.classList.add('passed');
+      if(editMode){
+        chip.innerHTML='LV'+lv+' <input type="number" class="level-input" data-idx="'+i+'" value="'+amt+'" min="1"/>';
+      }else{chip.textContent='LV'+lv+' ₹'+amt;}
       el.appendChild(chip);
     });
-    var oldSave = document.getElementById('abBtnSaveLevels');
-    if (oldSave) oldSave.remove();
-    if (editMode) {
-      var allInputs = el.querySelectorAll('.level-input');
-      allInputs.forEach(function(inp) {
-        inp.addEventListener('input', function() {
-          var vals = [];
-          el.querySelectorAll('.level-input').forEach(function(x) { vals.push(parseInt(x.value) || 1); });
-          updateConfigPreview(vals);
+    var oldSave=document.getElementById('abBtnSaveLevels');if(oldSave)oldSave.remove();
+    if(editMode){
+      el.querySelectorAll('.level-input').forEach(function(inp){
+        inp.addEventListener('input',function(){
+          var vals=[];el.querySelectorAll('.level-input').forEach(function(x){vals.push(parseInt(x.value)||1);});
+          E.levels=vals;UI.updateConfigPreview();
         });
       });
-      var btn = document.createElement('button');
-      btn.id = 'abBtnSaveLevels';
-      btn.className = 'ab-btn-save-levels';
-      btn.textContent = '💾 SAVE LEVELS';
-      btn.onclick = function() {
-        var inputs = el.querySelectorAll('.level-input');
-        var custom = [];
-        inputs.forEach(function(inp) { custom.push(parseInt(inp.value) || 1); });
-        if (socket) socket.emit('setLevels', { phone: currentView, custom: custom });
-        editMode = false;
-        var tog = document.getElementById('abEditToggle');
-        if (tog) tog.checked = false;
+      var btn=document.createElement('button');btn.id='abBtnSaveLevels';btn.className='ab-btn-save-levels';
+      btn.textContent='💾 SAVE LEVELS';
+      btn.onclick=function(){
+        var inputs=el.querySelectorAll('.level-input'),custom=[];
+        inputs.forEach(function(inp){custom.push(parseInt(inp.value)||1);});
+        E.levels=custom;E.cfg.maxLevel=custom.length;E.cfg.baseAmt=custom[0]||2;E.currentLevel=1;
+        editMode=false;UI.$('abEditToggle').checked=false;
+        UI.renderLevels();UI.updateConfigPreview();
       };
       el.parentElement.appendChild(btn);
     }
-  }
+  },
 
-  var betHistPage = 1;
-  var betHistData = [];
-  var ROWS_PER_PAGE = 10;
-
-  function renderBetHistory(history) {
-    betHistData = history || [];
-    betHistPage = 1;
-    renderBetHistPage();
-  }
-
-  function renderBetHistPage() {
-    var tbody = $('abHistoryBody');
-    var empty = $('abHistoryEmpty');
-    var pager = $('abBetHistPager');
-    if (!betHistData || betHistData.length === 0) {
-      tbody.innerHTML = '';
-      empty.style.display = '';
-      pager.style.display = 'none';
-      return;
-    }
-    empty.style.display = 'none';
-    var totalPages = Math.ceil(betHistData.length / ROWS_PER_PAGE);
-    if (betHistPage > totalPages) betHistPage = totalPages;
-    if (betHistPage < 1) betHistPage = 1;
-    var start = (betHistPage - 1) * ROWS_PER_PAGE;
-    var page = betHistData.slice(start, start + ROWS_PER_PAGE);
-    tbody.innerHTML = '';
-    page.forEach(function(b, i) {
-      var tr = document.createElement('tr');
-      tr.className = b.won ? 'row-win' : 'row-loss';
-      tr.innerHTML = '<td>' + (start + i + 1) + '</td>'
-        + '<td>...' + (b.issue || '').slice(-5) + '</td>'
-        + '<td>' + (b.pred || '') + '</td>'
-        + '<td>LV' + (b.level || 1) + '</td>'
-        + '<td>₹' + (b.amount || 0) + '</td>'
-        + '<td>' + (b.won ? '✅' : '❌') + '</td>'
-        + '<td class="' + (b.pnl >= 0 ? 'vg' : 'vr') + '">' + formatPnl(b.pnl || 0) + '</td>';
+  renderBetHistory:function(){
+    var tbody=UI.$('abHistoryBody'),empty=UI.$('abHistoryEmpty'),pager=UI.$('abBetHistPager');
+    if(!E.betHistory.length){tbody.innerHTML='';empty.style.display='';pager.style.display='none';return;}
+    empty.style.display='none';
+    var PP=10,total=Math.ceil(E.betHistory.length/PP);
+    if(bhPage>total)bhPage=total;if(bhPage<1)bhPage=1;
+    var start=(bhPage-1)*PP,page=E.betHistory.slice(start,start+PP);
+    tbody.innerHTML='';
+    page.forEach(function(b,i){
+      var tr=document.createElement('tr');tr.className=b.won?'row-win':'row-loss';
+      tr.innerHTML='<td>'+(start+i+1)+'</td><td>…'+(b.issue||'').slice(-5)+'</td><td>'+b.pred+'</td><td>LV'+b.level+'</td><td>₹'+b.amount+'</td><td>'+(b.won?'✅':'❌')+'</td><td class="'+(b.pnl>=0?'vg':'vr')+'">'+(b.pnl>=0?'+':'')+'₹'+Math.abs(b.pnl).toFixed(2)+'</td>';
       tbody.appendChild(tr);
     });
-    if (totalPages > 1) {
-      pager.style.display = '';
-      $('abBetHistPageInfo').textContent = betHistPage + ' / ' + totalPages;
-    } else {
-      pager.style.display = 'none';
-    }
-  }
+    if(total>1){pager.style.display='';UI.$('abBetHistPageInfo').textContent=bhPage+'/'+total;}else{pager.style.display='none';}
+  },
 
-  var predHistPage = 1;
-  var predHistData = [];
-
-  function renderPredHistory(history) {
-    predHistData = history || [];
-    var totalPages = Math.ceil(predHistData.length / ROWS_PER_PAGE);
-    if (predHistPage > totalPages) predHistPage = totalPages;
-    if (predHistPage < 1) predHistPage = 1;
-    renderPredHistPage();
-  }
-
-  function renderPredHistPage() {
-    var tbody = $('abPredHistBody');
-    var empty = $('abPredHistEmpty');
-    var pager = $('abPredHistPager');
-    if (!predHistData || predHistData.length === 0) {
-      tbody.innerHTML = '';
-      empty.style.display = '';
-      pager.style.display = 'none';
-      return;
-    }
-    empty.style.display = 'none';
-    var totalPages = Math.ceil(predHistData.length / ROWS_PER_PAGE);
-    if (predHistPage > totalPages) predHistPage = totalPages;
-    if (predHistPage < 1) predHistPage = 1;
-    var start = (predHistPage - 1) * ROWS_PER_PAGE;
-    var page = predHistData.slice(start, start + ROWS_PER_PAGE);
-    tbody.innerHTML = '';
-    page.forEach(function(p, i) {
-      var tr = document.createElement('tr');
-      var resText = p.result || '⏳';
-      var checkText = p.correct === true ? '✅' : (p.correct === false ? '❌' : '—');
-      tr.className = p.correct === true ? 'row-win' : (p.correct === false ? 'row-loss' : '');
-      tr.innerHTML = '<td>' + (start + i + 1) + '</td>'
-        + '<td>...' + (p.forIssue || '').slice(-5) + '</td>'
-        + '<td>' + (p.formula || '—') + '</td>'
-        + '<td class="' + (p.pred === 'BIG' ? 'vg' : 'vr') + '">' + (p.pred || '') + '</td>'
-        + '<td class="' + (resText === 'BIG' ? 'vg' : (resText === 'SMALL' ? 'vr' : '')) + '">' + resText + '</td>'
-        + '<td>' + checkText + '</td>';
+  renderPredHistory:function(){
+    var tbody=UI.$('abPredHistBody'),empty=UI.$('abPredHistEmpty'),pager=UI.$('abPredHistPager');
+    if(!E.predHistory.length){tbody.innerHTML='';empty.style.display='';pager.style.display='none';return;}
+    empty.style.display='none';
+    var PP=10,total=Math.ceil(E.predHistory.length/PP);
+    if(phPage>total)phPage=total;if(phPage<1)phPage=1;
+    var start=(phPage-1)*PP,page=E.predHistory.slice(start,start+PP);
+    tbody.innerHTML='';
+    page.forEach(function(p,i){
+      var tr=document.createElement('tr');tr.className=p.correct?'row-win':'row-loss';
+      var predC=p.pred==='BIG'?'vg':'vr',resC=p.result==='BIG'?'vg':'vr';
+      tr.innerHTML='<td>'+(start+i+1)+'</td><td>…'+(p.forIssue||'').slice(-5)+'</td><td class="'+predC+'">'+p.pred+'</td><td class="'+resC+'">'+p.result+'</td><td>'+(p.correct?'✅':'❌')+'</td>';
       tbody.appendChild(tr);
     });
-    if (totalPages > 1) {
-      pager.style.display = '';
-      $('abPredHistPageInfo').textContent = predHistPage + ' / ' + totalPages;
-    } else {
-      pager.style.display = 'none';
-    }
-  }
+    if(total>1){pager.style.display='';UI.$('abPredHistPageInfo').textContent=phPage+'/'+total;}else{pager.style.display='none';}
+  },
 
-
-  function renderBetRecord(d) {
-    var list = $('abBetRecordList');
-    var result = d.result;
-    if (!result || result.code !== 0 || !result.data) {
-      list.innerHTML = '<div class="kp-empty">No records found</div>';
-      return;
-    }
-    var items = result.data.list || result.data || [];
-    if (!Array.isArray(items) || items.length === 0) {
-      list.innerHTML = '<div class="kp-empty">No records found</div>';
-      return;
-    }
-    list.innerHTML = '';
-    items.forEach(function(r) {
-      var div = document.createElement('div');
-      div.className = 'bet-item';
-      var amt = parseFloat(r.amount || r.betAmount || r.realAmount || 0);
-      var winLose = parseFloat(r.winLoseAmount || r.winAmount || 0);
-      var isWin = winLose > 0;
-      var content = r.betContent || r.playType || '';
-      var bs = '';
-      if (content.indexOf('_Small') >= 0) bs = 'small';
-      else if (content.indexOf('_Big') >= 0) bs = 'big';
-      else bs = 'num';
-      var bsLabel = bs.charAt(0).toUpperCase() + bs.slice(1);
-      var betTime = r.betTime ? new Date(r.betTime).toLocaleTimeString('en-IN', {hour:'2-digit',minute:'2-digit',hour12:false}) : '';
-      div.innerHTML = '<span class="bet-tag ' + bs + '">' + bsLabel + '</span>'
-        + '<div class="bet-mid">'
-        + '<div class="bet-period">...' + String(r.issueNumber || '').slice(-5) + '</div>'
-        + (betTime ? '<div class="bet-time">' + betTime + '</div>' : '')
-        + '</div>'
-        + '<div class="bet-right">'
-        + '<div class="bet-status ' + (isWin ? 'ok' : 'fail') + '">' + (isWin ? 'WIN' : 'LOSS') + '</div>'
-        + '<div class="bet-amt ' + (isWin ? 'win' : 'loss') + '">' + (isWin ? '+₹' + winLose.toFixed(2) : '-₹' + amt.toFixed(2)) + '</div>'
-        + '</div>';
+  renderBetRecord:function(d){
+    var list=UI.$('abBetRecordList');
+    if(!d||!d.result||d.result.code!==0||!d.result.data){list.innerHTML='<div class="kp-empty">No records found</div>';return;}
+    var items=d.result.data.list||d.result.data||[];
+    if(!items.length){list.innerHTML='<div class="kp-empty">No records found</div>';return;}
+    list.innerHTML='';
+    items.forEach(function(r){
+      var div=document.createElement('div');div.className='bet-item';
+      var amt=parseFloat(r.amount||r.betAmount||0);
+      var win=parseFloat(r.winLoseAmount||r.winAmount||0)>0;
+      var c=r.betContent||r.playType||'';
+      var bs=c.includes('_Small')?'small':c.includes('_Big')?'big':'num';
+      var t=r.betTime?new Date(r.betTime).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:false}):'';
+      div.innerHTML='<span class="bet-tag '+bs+'">'+bs.charAt(0).toUpperCase()+bs.slice(1)+'</span><div class="bet-mid"><div class="bet-period">…'+String(r.issueNumber||'').slice(-5)+'</div>'+(t?'<div class="bet-time">'+t+'</div>':'')+'</div><div class="bet-right"><div class="bet-status '+(win?'ok':'fail')+'">'+(win?'WIN':'LOSS')+'</div><div class="bet-amt '+(win?'win':'loss')+'">'+(win?'+₹'+parseFloat(r.winLoseAmount||0).toFixed(2):'-₹'+amt.toFixed(2))+'</div></div>';
       list.appendChild(div);
     });
-    var totalPage = result.data.totalPage || 1;
-    $('abBetRecordPageInfo').textContent = d.page + ' / ' + totalPage;
+    var tp=(d.result.data.totalPage)||1;
+    UI.$('abBetRecordPageInfo').textContent=(brPage)+'/'+tp;
+  },
+
+  renderAccountTabs:function(){
+    var tabs=UI.$('abAcctTabs');tabs.innerHTML='';
+    accounts.forEach(function(a){
+      var tab=document.createElement('div');
+      tab.className='kp-acct-tab'+(a.phone===currentView?' active':'');
+      tab.setAttribute('data-phone',a.phone);
+      var last4=a.phone.slice(-4);
+      tab.innerHTML='<span>…'+last4+'</span>';
+      tab.addEventListener('click',function(){switchAccount(a.phone);});
+      tabs.appendChild(tab);
+    });
+  }
+};
+
+// ── App State ─────────────────────────────────────────
+var accounts=[], currentView=null, editMode=false;
+var bhPage=1, phPage=1, brPage=1;
+var captchaId=null, sliderX=0, trackData=[], trackStart='', dragging=false;
+var deviceId='kp3_'+Math.random().toString(36).slice(2,10);
+var _sessionStart=0;
+
+function saveState(){
+  try{sessionStorage.setItem('kp_accts',JSON.stringify(accounts));sessionStorage.setItem('kp_view',currentView||'');}catch(e){}
+}
+function loadState(){
+  try{accounts=JSON.parse(sessionStorage.getItem('kp_accts')||'[]');}catch(e){accounts=[];}
+  currentView=sessionStorage.getItem('kp_view')||null;
+}
+loadState();
+
+function $(id){return document.getElementById(id);}
+function formatTime(ms){var s=Math.floor(ms/1000),h=Math.floor(s/3600);s%=3600;var m=Math.floor(s/60);s%=60;return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');}
+
+// ── Account management ────────────────────────────────
+function switchAccount(phone){
+  if(currentView===phone)return;
+  currentView=phone;saveState();
+  // Sync engine to this account
+  var acct=accounts.find(function(a){return a.phone===phone;});
+  if(acct){E.token=acct.lotteryToken||acct.webapiToken;E.wToken=acct.webapiToken;E.phone=acct.phone;}
+  UI.renderAccountTabs();UI.updateState();
+}
+
+// ── Show / hide screens ───────────────────────────────
+function showLogin(){$('abLoginSection').style.display='';$('abDashboard').style.display='none';$('abBtnBackToDash').style.display=(window.KP_PRO_ACCESS&&accounts.length>0)?'':'none';}
+function showDashboard(){
+  $('abLoginSection').style.display='none';$('abDashboard').style.display='';
+  if(!window.KP_PRO_ACCESS){
+    var ab=$('abBtnAddAcct');if(ab)ab.remove();
+    if(accounts.length>1){accounts=accounts.slice(0,1);saveState();}
+  }
+  UI.renderAccountTabs();UI.updateState();UI.renderLevels();UI.updateConfigPreview();
+  // Start engine for current account
+  var acct=accounts.find(function(a){return a.phone===currentView;});
+  if(acct){
+    E.token=acct.lotteryToken||acct.webapiToken;E.wToken=acct.webapiToken;E.phone=acct.phone;
+    E.levels=buildLevels(E.cfg.baseAmt,E.cfg.maxLevel);
+    // Refresh balance
+    fetchBalance(E.token).then(function(bal){if(bal>=0){E.balance=bal;UI.updateState();}});
+    startPoll();
+    addLog('info','🔗 Engine connected as '+acct.phone);
+  }
+}
+
+// ── Captcha & Login ───────────────────────────────────
+$('abBtnCaptcha').addEventListener('click',handleCaptcha);
+async function handleCaptcha(){
+  var phone=$('abPhone').value.trim().replace(/[^0-9]/g,'');
+  if(!phone){setStatus('❌ Enter phone number first',false);return;}
+  $('abBtnCaptcha').disabled=true;$('abBtnCaptcha').textContent='Loading…';
+  try{
+    var r=await goaPost('/Captcha',{});
+    if(r&&r.code===0&&r.data){
+      captchaId=r.data.captchaId;
+      $('abCaptchaBg').src=r.data.backgroundImage;
+      $('abCaptchaPiece').src=r.data.sliderImage;
+      $('abCaptchaSection').style.display='block';
+      sliderX=0;trackData=[];$('abCaptchaPiece').style.left='0px';$('abSliderThumb').style.left='3px';
+      setupSlider();setStatus('✅ Drag the slider to verify',true);
+    }else{setStatus((r&&r.msg)||'Captcha failed',false);}
+  }catch(e){setStatus('❌ '+e.message,false);}
+  finally{$('abBtnCaptcha').disabled=false;$('abBtnCaptcha').textContent='🔑 GET CAPTCHA';}
+}
+
+function setupSlider(){
+  // Remove old listeners by cloning track content
+  var track=$('abSliderTrack');
+  var oldThumb=$('abSliderThumb');
+  var newThumb=oldThumb.cloneNode(true);
+  oldThumb.parentNode.replaceChild(newThumb,oldThumb);
+
+  var piece=$('abCaptchaPiece');
+  var maxX=track.offsetWidth-newThumb.offsetWidth-6;
+  if(maxX<100)maxX=224; // fallback
+
+  dragging=false;sliderX=0;trackData=[];
+  newThumb.style.left='3px';
+  if(piece)piece.style.left='0px';
+
+  function onStart(e){
+    dragging=true;trackData=[];trackStart=new Date().toISOString();
+    e.preventDefault();e.stopPropagation();
+  }
+  function onMove(e){
+    if(!dragging)return;
+    e.preventDefault();
+    var clientX=e.touches?e.touches[0].clientX:e.clientX;
+    var clientY=e.touches?e.touches[0].clientY:e.clientY;
+    var rect=track.getBoundingClientRect();
+    var x=Math.max(0,Math.min(clientX-rect.left-newThumb.offsetWidth/2, maxX));
+    sliderX=x;
+    newThumb.style.left=(x+3)+'px';
+    if(piece)piece.style.left=x+'px';
+    trackData.push({x:Math.round(x),y:Math.round(clientY-rect.top),t:trackData.length+1});
+  }
+  function onEnd(e){
+    if(!dragging)return;
+    dragging=false;
+    if(trackData.length>0){
+      $('abCaptchaStatus').textContent='✅ Slider set — click LOGIN';
+      $('abCaptchaStatus').className='status-msg ok';
+    }
   }
 
-  /* ═══ Session Timer ═══ */
-  setInterval(function() {
-    if (_sessionStart) {
-      $('abSessionTime').textContent = formatTime(Date.now() - _sessionStart);
-    }
-  }, 1000);
+  newThumb.addEventListener('mousedown',onStart);
+  newThumb.addEventListener('touchstart',onStart,{passive:false});
+  document.addEventListener('mousemove',onMove);
+  document.addEventListener('touchmove',onMove,{passive:false});
+  document.addEventListener('mouseup',onEnd);
+  document.addEventListener('touchend',onEnd);
+}
 
-  /* ═══ Check Saved Accounts ═══ */
-  if (accounts.length > 0) {
-    showDashboard();
-  } else {
+$('abBtnLogin').addEventListener('click',handleLogin);
+$('abPwd').addEventListener('keydown',function(e){if(e.key==='Enter')handleLogin();});
+async function handleLogin(){
+  var phone=$('abPhone').value.trim();
+  var pwd=$('abPwd').value.trim();
+  if(!phone||!pwd){setStatus('❌ Enter phone & password',false);return;}
+  if(!captchaId){setStatus('❌ Get captcha first',false);return;}
+  if(trackData.length<3){setStatus('❌ Drag the slider',false);return;}
+  if(accounts.some(function(a){return a.phone===phone;})){setStatus('⚠️ Already logged in',false);return;}
+  setStatus('⏳ Logging in…',null);$('abBtnLogin').disabled=true;
+  try{
+    var cleaned=phone.replace(/[^0-9]/g,'');
+    var username=cleaned.length<=10?'91'+cleaned:cleaned;
+    var data=await goaPost('/Login',{
+      username:username,captchaId:captchaId,
+      track:{backgroundImageWidth:280,backgroundImageHeight:175,sliderImageWidth:56,sliderImageHeight:175,startTime:trackStart,endTime:new Date().toISOString(),tracks:trackData},
+      pwd:pwd,phonetype:0,logintype:'mobile',packId:'',deviceId:deviceId
+    });
+    if(data&&data.code===0&&data.data){
+      var d=data.data;
+      var lt='';
+      if(d.lotteryLoginUrl){var m=d.lotteryLoginUrl.match(/Token=([^&]+)/);if(m)lt=decodeURIComponent(m[1]);}
+      if(!lt&&d.token)lt=d.token;
+      if(!window.KP_PRO_ACCESS)accounts=[];
+      accounts.push({phone:phone,lotteryToken:lt,webapiToken:d.token||'',pwd:pwd});
+      currentView=phone;saveState();
+      setStatus('✅ Login success!',true);
+      UI.toast('Logged In','Welcome '+phone,'info');
+      $('abPhone').value='';$('abPwd').value='';$('abCaptchaSection').style.display='none';captchaId=null;
+      setTimeout(showDashboard,500);
+    }else{setStatus('❌ '+(data&&data.msg||'Login failed'),false);handleCaptcha();}
+  }catch(e){setStatus('❌ '+e.message,false);}
+  finally{$('abBtnLogin').disabled=false;}
+}
+
+function setStatus(msg,ok){var el=$('abLoginStatus');el.textContent=msg;el.className='status-msg'+(ok===true?' ok':ok===false?' err':'');}
+
+// ── Dashboard Buttons ─────────────────────────────────
+$('abBtnBackToDash').addEventListener('click',showDashboard);
+$('abBtnAddAcct')&&$('abBtnAddAcct').addEventListener('click',function(){if(window.KP_PRO_ACCESS)showLogin();});
+
+$('abBtnLogout').addEventListener('click',function(){
+  if(!currentView)return;
+  accounts=accounts.filter(function(a){return a.phone!==currentView;});
+  if(window.KP_PRO_ACCESS&&accounts.length>0){
+    currentView=accounts[0].phone;saveState();
+    var acct=accounts[0];
+    E.token=acct.lotteryToken||acct.webapiToken;E.wToken=acct.webapiToken;E.phone=acct.phone;
+    UI.renderAccountTabs();UI.updateState();
+  }else{
+    currentView=null;accounts=[];saveState();
+    E.engine='stopped';if(E.pollTimer){clearInterval(E.pollTimer);E.pollTimer=null;}
+    E.token=null;E.wToken=null;E.phone=null;
     showLogin();
   }
+  UI.toast('Logged Out','Account removed','info');
+});
 
-  /* ═══ CAPTCHA ═══ */
-  captchaBtn.addEventListener('click', handleCaptcha);
+$('abBtnStart').addEventListener('click',function(){
+  if(!E.token&&!E.wToken){UI.toast('Error','Not logged in','error');return;}
+  E.engine='running';E.currentLevel=1;E.watchLossCount=0;E.watchActive=E.cfg.watchEnabled;
+  E.sessionStart=Date.now();_sessionStart=Date.now();
+  addLog('success','🚀 Engine started');UI.updateState();
+});
 
-  async function handleCaptcha() {
-    var phone = phoneEl.value.trim().replace(/[^0-9]/g,'');
-    if (!phone) { status('❌ Enter your phone number first', false); return; }
+$('abBtnStop').addEventListener('click',function(){
+  E.engine='stopped';E.betPlaced=false;
+  addLog('warn','⏹ Engine stopped');UI.updateState();
+});
 
-    captchaBtn.disabled = true;
-    captchaBtn.textContent = 'Loading...';
-    try {
-      var res = await fetch('/api/goa/captcha', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({})
-      });
-      var data = await res.json();
-      if (data && data.code === 0 && data.data) {
-        captchaId = data.data.captchaId;
-        $('abCaptchaBg').src = data.data.backgroundImage;
-        $('abCaptchaPiece').src = data.data.sliderImage;
-        captchaSec.style.display = 'block';
-        sliderX = 0; trackData = [];
-        $('abCaptchaPiece').style.left = '0px';
-        $('abSliderThumb').style.left = '3px';
-        setupSlider();
-        status('✅ Captcha loaded — drag the slider', true);
-      } else {
-        status(data?.msg || 'Captcha failed', false);
-      }
-    } catch(e) {
-      status('❌ ' + e.message, false);
-    } finally {
-      captchaBtn.disabled = false;
-      captchaBtn.textContent = '🔑 GET CAPTCHA';
-    }
+$('abBtnClearStats').addEventListener('click',function(){
+  E.wins=0;E.losses=0;E.pnl=0;E.currentLevel=1;E.highestLevel=1;
+  E.sessionStart=Date.now();_sessionStart=Date.now();
+  E.betHistory=[];E.predHistory=[];
+  UI.updateState();UI.renderBetHistory();UI.renderPredHistory();
+});
+
+$('abBtnClearLog').addEventListener('click',function(){$('abLog').innerHTML='';});
+
+// Config changes
+var cfgTimer=null;
+function onCfgChange(){
+  clearTimeout(cfgTimer);
+  cfgTimer=setTimeout(function(){
+    E.cfg.baseAmt=parseInt($('abBaseAmt').value)||2;
+    E.cfg.maxLevel=parseInt($('abMaxLvl').value)||10;
+    E.levels=buildLevels(E.cfg.baseAmt,E.cfg.maxLevel);
+    E.currentLevel=1;UI.renderLevels();UI.updateConfigPreview();
+  },400);
+}
+$('abBaseAmt').addEventListener('input',onCfgChange);
+$('abMaxLvl').addEventListener('input',onCfgChange);
+
+$('abWatchToggle').addEventListener('change',function(){E.cfg.watchEnabled=this.checked;});
+$('abWatchCount').addEventListener('change',function(){E.cfg.watchCount=parseInt(this.value)||1;});
+
+$('abEditToggle').addEventListener('change',function(){editMode=this.checked;UI.renderLevels();UI.updateConfigPreview();});
+
+// Bet record
+$('abBtnRefreshBR').addEventListener('click',function(){
+  brPage=1;if(E.token||E.wToken){
+    fetchBetRecord(E.token||E.wToken,1).then(function(r){UI.renderBetRecord({result:r,page:1});});
   }
+});
+$('abBetRecordPrev').addEventListener('click',function(){if(brPage>1){brPage--;fetchBetRecord(E.token||E.wToken,brPage).then(function(r){UI.renderBetRecord({result:r,page:brPage});});}});
+$('abBetRecordNext').addEventListener('click',function(){brPage++;fetchBetRecord(E.token||E.wToken,brPage).then(function(r){UI.renderBetRecord({result:r,page:brPage});});});
 
-  /* ═══ SLIDER ═══ */
-  function setupSlider() {
-    var thumb = $('abSliderThumb');
-    var piece = $('abCaptchaPiece');
-    var track = $('abSliderTrack');
-    var trackWidth = 280 - 36;
+// Bet/Pred history pagers
+$('abBetHistPrev').addEventListener('click',function(){if(bhPage>1){bhPage--;UI.renderBetHistory();}});
+$('abBetHistNext').addEventListener('click',function(){bhPage++;UI.renderBetHistory();});
+$('abPredHistPrev').addEventListener('click',function(){if(phPage>1){phPage--;UI.renderPredHistory();}});
+$('abPredHistNext').addEventListener('click',function(){phPage++;UI.renderPredHistory();});
 
-    function onStart(e) {
-      dragging = true;
-      trackData = [];
-      trackStart = new Date().toISOString();
-      e.preventDefault();
-    }
-    function onMove(e) {
-      if (!dragging) return;
-      e.preventDefault();
-      var rect = track.getBoundingClientRect();
-      var cx = e.touches ? e.touches[0].clientX : e.clientX;
-      var x = Math.max(0, Math.min(cx - rect.left - 18, trackWidth));
-      sliderX = x;
-      thumb.style.left = x + 'px';
-      piece.style.left = x + 'px';
-      trackData.push({ x: Math.round(x), y: Math.round((e.touches ? e.touches[0].clientY : e.clientY) - rect.top), t: trackData.length + 1 });
-    }
-    function onEnd() { dragging = false; }
+// Session timer
+setInterval(function(){if(_sessionStart)$('abSessionTime').textContent=formatTime(Date.now()-_sessionStart);},1000);
 
-    var nt = thumb.cloneNode(true);
-    thumb.parentNode.replaceChild(nt, thumb);
-    nt.addEventListener('mousedown', onStart);
-    nt.addEventListener('touchstart', onStart, { passive: false });
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('touchmove', onMove, { passive: false });
-    document.addEventListener('mouseup', onEnd);
-    document.addEventListener('touchend', onEnd);
-  }
-
-  /* ═══ LOGIN (adds account) ═══ */
-  loginBtn.addEventListener('click', handleLogin);
-  pwdEl.addEventListener('keydown', function(e){ if(e.key==='Enter') handleLogin(); });
-
-  async function handleLogin() {
-    var phone = phoneEl.value.trim();
-    var pwd   = pwdEl.value.trim();
-    if (!phone || !pwd) { status('❌ Enter phone & password', false); return; }
-    if (!captchaId) { status('❌ Get captcha first', false); return; }
-    if (trackData.length < 3) { status('❌ Drag the slider', false); return; }
-
-    // Check if already added
-    if (accounts.some(function(a) { return a.phone === phone; })) {
-      status('⚠️ Account already added', false);
-      return;
-    }
-
-    status('⏳ Logging in...', true);
-    loginBtn.disabled = true;
-
-    try {
-      var cleaned  = phone.replace(/[^0-9]/g, '');
-      var username = cleaned.length <= 10 ? '91' + cleaned : cleaned;
-
-      var loginPayload = {
-        username: username,
-        captchaId: captchaId,
-        track: { backgroundImageWidth: 280, backgroundImageHeight: 175, sliderImageWidth: 56, sliderImageHeight: 175, startTime: trackStart, endTime: new Date().toISOString(), tracks: trackData },
-        pwd: pwd,
-        phonetype: 0,
-        logintype: 'mobile',
-        packId: '',
-        deviceId: deviceId
-      };
-
-      var res = await fetch('/api/goa/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(loginPayload)
-      });
-      var data = await res.json();
-
-      if (data && data.code === 0 && data.data) {
-        var d = data.data;
-        var lt = '';
-        if (d.lotteryLoginUrl) {
-          var m = d.lotteryLoginUrl.match(/Token=([^&]+)/);
-          if (m) lt = decodeURIComponent(m[1]);
-        }
-        if (!lt && d.token) lt = d.token;
-
-        var acctEntry = {
-          phone: phone,
-          lotteryToken: lt,
-          webapiToken: d.token || '',
-          pwd: pwd,
-        };
-
-        /* Non-PRO devices: enforce single account — replace any existing */
-        if (!kpIsDefault) accounts = [];
-        accounts.push(acctEntry);
-        currentView = phone;
-        saveAccounts();
-
-        status('✅ Login success!', true);
-        toast('Logged In', 'Welcome ' + phone, 'info');
-
-        // Reset login form
-        phoneEl.value = '';
-        pwdEl.value = '';
-        captchaSec.style.display = 'none';
-        captchaId = null;
-
-        setTimeout(function(){ showDashboard(); }, 500);
-      } else {
-        status('❌ ' + (data?.msg || 'Login failed'), false);
-        handleCaptcha();
-      }
-    } catch(e) {
-      status('❌ ' + e.message, false);
-    } finally {
-      loginBtn.disabled = false;
-    }
-  }
-
-  /* ═══ Dashboard Event Listeners ═══ */
-
-  // Add Account
-  var _addAcctBtn = $('abBtnAddAcct');
-  if (_addAcctBtn) {
-    _addAcctBtn.addEventListener('click', function() {
-      if (!kpGetIsDefault()) return;
-      showLogin();
-    });
-  }
-
-  // Back to Dashboard
-  $('abBtnBackToDash').addEventListener('click', function() {
-    showDashboard();
-  });
-
-  // Logout (current account only)
-  $('abBtnLogout').addEventListener('click', function(){
-    if (!currentView) return;
-    if (socket) socket.emit('logout', { phone: currentView });
-    accounts = accounts.filter(function(a) { return a.phone !== currentView; });
-
-    if (kpIsDefault && accounts.length > 0) {
-      /* PRO device: switch to next available account */
-      currentView = accounts[0].phone;
-      saveAccounts();
-      socket.emit('switchView', { phone: currentView });
-    } else {
-      /* Regular device (or last account): back to login */
-      currentView = null;
-      accounts = [];
-      saveAccounts();
-      if (socket) { socket.disconnect(); socket = null; }
-      showLogin();
-    }
-    toast('Logged Out', 'Account removed', 'info');
-  });
-
-  // Start
-  $('abBtnStart').addEventListener('click', function(){
-    if (!socket || !currentView) return;
-    socket.emit('start', { phone: currentView });
-  });
-
-  // Formula Popup
-  $('abBtnFormulaPopup').addEventListener('click', function(e) {
-    e.stopPropagation();
-    renderFormulaGrid($('abFormulaName').textContent);
-    $('abFormulaPopup').style.display = 'flex';
-  });
-  $('abFormulaActive').addEventListener('click', function() {
-    renderFormulaGrid($('abFormulaName').textContent);
-    $('abFormulaPopup').style.display = 'flex';
-  });
-  $('abBtnFormulaClose').addEventListener('click', function(){
-    $('abFormulaPopup').style.display = 'none';
-  });
-  $('abFormulaPopup').addEventListener('click', function(e){
-    if (e.target === this) this.style.display = 'none';
-  });
-
-  // Stop
-  $('abBtnStop').addEventListener('click', function(){
-    if (!socket || !currentView) return;
-    socket.emit('stop', { phone: currentView, profit: kpLastPnl });
-  });
-
-  // Reset Stats
-  $('abBtnClearStats').addEventListener('click', function(){
-    if (socket && currentView) socket.emit('resetStats', { phone: currentView });
-  });
-
-  // Clear Log
-  $('abBtnClearLog').addEventListener('click', function(){
-    $('abLog').innerHTML = '';
-  });
-
-  // Base Amount / Max Level change
-  var configTimer = null;
-  function onConfigChange() {
-    clearTimeout(configTimer);
-    configTimer = setTimeout(function() {
-      if (socket && currentView) {
-        socket.emit('setLevels', {
-          phone: currentView,
-          baseAmt: parseInt($('abBaseAmt').value) || 2,
-          maxLevel: parseInt($('abMaxLvl').value) || 10,
-        });
-      }
-    }, 500);
-  }
-  $('abBaseAmt').addEventListener('input', onConfigChange);
-  $('abMaxLvl').addEventListener('input', onConfigChange);
-
-  // Watch Toggle
-  $('abWatchToggle').addEventListener('change', function(){
-    if (socket && currentView) {
-      socket.emit('setWatch', {
-        phone: currentView,
-        enabled: this.checked,
-        count: parseInt($('abWatchCount').value) || 1,
-      });
-    }
-  });
-
-  // Watch Count
-  $('abWatchCount').addEventListener('change', function(){
-    if (socket && currentView) {
-      socket.emit('setWatch', {
-        phone: currentView,
-        enabled: $('abWatchToggle').checked,
-        count: parseInt(this.value) || 1,
-      });
-    }
-  });
-
-  // Formula is fixed to Shadow Adaptive Engine v14.0 — no popup needed
-
-  // Bet History Pagination
-  $('abBetHistPrev').addEventListener('click', function(){
-    if (betHistPage > 1) { betHistPage--; renderBetHistPage(); }
-  });
-  $('abBetHistNext').addEventListener('click', function(){
-    var totalPages = Math.ceil(betHistData.length / ROWS_PER_PAGE);
-    if (betHistPage < totalPages) { betHistPage++; renderBetHistPage(); }
-  });
-
-  // Prediction History Pagination
-  $('abPredHistPrev').addEventListener('click', function(){
-    if (predHistPage > 1) { predHistPage--; renderPredHistPage(); }
-  });
-  $('abPredHistNext').addEventListener('click', function(){
-    var totalPages = Math.ceil(predHistData.length / ROWS_PER_PAGE);
-    if (predHistPage < totalPages) { predHistPage++; renderPredHistPage(); }
-  });
-
-  // Edit Toggle for Levels
-  $('abEditToggle').addEventListener('change', function(){
-    editMode = this.checked;
-    if (lastKnownLevels) {
-      renderLevels(lastKnownLevels, lastKnownLevel);
-      updateConfigPreview(lastKnownLevels);
-    }
-  });
-
-  // Bet Record
-  $('abBtnRefreshBR').addEventListener('click', function(){
-    betRecordPage = 1;
-    if (socket && currentView) socket.emit('getBetRecord', { phone: currentView, page: 1 });
-  });
-
-  // ─────────────────────────────────────────────────────
-  // HISTORY EXPORT
-  // ─────────────────────────────────────────────────────
-  var _expRecords = [];
-
-  window.startHistoryExport = function() {
-    if (!socket) { expLog('err', 'Not connected to server.'); return; }
-    var totalWant = parseInt($('expRecords').value) || 500;
-    _expRecords = [];
-    $('expBtnFetch').disabled = true;
-    $('expBtnDownload').style.display = 'none';
-    $('expProgress').style.display = 'block';
-    $('expStats').style.display = 'none';
-    $('expLog').style.display = 'block';
-    $('expLog').innerHTML = '';
-    $('expBar').style.width = '10%';
-    $('expProgressText').textContent = 'Requesting ' + totalWant + ' records from server…';
-    expLog('info', 'Fetching ' + totalWant + ' records via server (signed + paginated)…');
-    socket.emit('exportHistory', { phone: currentView, totalRecords: totalWant });
-  };
-
-  function _bindExpHistorySocket() {
-    socket.on('exportHistoryProgress', function(d) {
-      var pct = Math.round((d.page / d.maxPages) * 100);
-      $('expBar').style.width = pct + '%';
-      $('expProgressText').textContent = 'Page ' + d.page + ' / ' + d.maxPages + '  —  ' + d.total + ' records';
-      if (d.retrying) {
-        expLog('warn', '⚠ Page ' + d.page + ' retry ' + d.retrying + '/3 — waiting…');
-      } else if (d.error) {
-        expLog('err', 'Page ' + d.page + ' failed: ' + d.error);
-      } else if (d.done) {
-        expLog('info', 'Page ' + d.page + ': empty — no more records.');
-      } else {
-        expLog('ok', 'Page ' + d.page + '/' + d.maxPages + ' → total ' + d.total);
-      }
-    });
-    socket.on('exportHistoryResult', function(data) {
-      $('expBtnFetch').disabled = false;
-      if (!data.ok || !data.list || !data.list.length) {
-        $('expBar').style.width = '100%';
-        $('expProgressText').textContent = 'Failed.';
-        expLog('err', 'Export failed: ' + (data.msg || 'no records returned'));
-        return;
-      }
-      data.list.forEach(function(item) {
-        var n = parseInt(item.number);
-        _expRecords.push({
-          issueNumber: item.issueNumber || '',
-          number:      item.number !== undefined ? item.number : '',
-          bs:          n >= 5 ? 'B' : 'S',
-          colour:      item.colour || item.color || '',
-          openTime:    item.openTime || ''
-        });
-      });
-      $('expBar').style.width = '100%';
-      $('expProgressText').textContent = '✓ Done — ' + _expRecords.length + ' records fetched.';
-      expLog('ok', 'Complete: ' + _expRecords.length + ' records received from server.');
-      $('expBtnDownload').style.display = '';
-      expShowStats();
-    });
-  }
-
-  window.downloadHistoryCSV = function() {
-    if (!_expRecords.length) return;
-    var cols = ['issueNumber','number','bs','colour','openTime'];
-    var rows = [cols.join(',')];
-    _expRecords.forEach(function(r) {
-      rows.push(cols.map(function(c){ return '"' + String(r[c]||'').replace(/"/g,'""') + '"'; }).join(','));
-    });
-    var blob = new Blob([rows.join('\n')], {type:'text/csv'});
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'wingo_history_' + new Date().toISOString().replace(/[:.]/g,'-').slice(0,19) + '.csv';
-    a.click();
-    expLog('ok', 'CSV downloaded: ' + _expRecords.length + ' rows → ' + a.download);
-  };
-
-  function expLog(type, msg) {
-    var box = $('expLog');
-    var line = document.createElement('div');
-    var colors = {ok:'#34d399',err:'#f87171',warn:'#fbbf24',info:'#a78bfa'};
-    line.style.color = colors[type] || '#6677aa';
-    line.textContent = '[' + new Date().toLocaleTimeString() + '] ' + msg;
-    box.appendChild(line);
-    box.scrollTop = box.scrollHeight;
-  }
-
-  function expShowStats() {
-    var total = _expRecords.length;
-    var bigs  = _expRecords.filter(function(r){return r.bs==='B';}).length;
-    var smalls = total - bigs;
-    var maxRun = 1, curRun = 1;
-    for (var i = 1; i < _expRecords.length; i++) {
-      if (_expRecords[i].bs === _expRecords[i-1].bs) { curRun++; maxRun = Math.max(maxRun,curRun); }
-      else curRun = 1;
-    }
-    var grid = $('expStatsGrid');
-    var cell = function(val, lbl, col) {
-      return '<div style="text-align:center;padding:8px;background:#13131f;border:1px solid #1e1e35;border-radius:6px">' +
-        '<div style="font-size:1.2rem;font-weight:bold;color:' + (col||'#a78bfa') + '">' + val + '</div>' +
-        '<div style="font-size:10px;color:#555577;margin-top:2px;text-transform:uppercase">' + lbl + '</div></div>';
-    };
-    grid.innerHTML =
-      cell(total,   'Records') +
-      cell(bigs,    'Big ≥5',  '#f87171') +
-      cell(smalls,  'Small <5','#60a5fa') +
-      cell((bigs/total*100).toFixed(1)+'%', 'Big %') +
-      cell(maxRun,  'Max Streak','#fbbf24') +
-      cell((smalls/total*100).toFixed(1)+'%', 'Small %');
-    $('expStats').style.display = 'block';
-  }
-  $('abBetRecordPrev').addEventListener('click', function(){
-    if (betRecordPage > 1) { betRecordPage--; if (socket && currentView) socket.emit('getBetRecord', { phone: currentView, page: betRecordPage }); }
-  });
-  $('abBetRecordNext').addEventListener('click', function(){
-    betRecordPage++;
-    if (socket && currentView) socket.emit('getBetRecord', { phone: currentView, page: betRecordPage });
-  });
-
-
-
-  /* ── Warmup: fetches 500 records via server token, then auto-starts ── */
-  function nexusWarmup() {
-    if (!socket || !currentView) { alert('Not connected / no account selected'); return; }
-    $('nxBtnWarmup').disabled = true;
-    $('nxBtnWarmup').textContent = '⏳ Warming up…';
-    $('nxWarmupBar').style.display = '';
-    $('nxWarmupFill').style.width = '5%';
-    $('nxWarmupStatus').textContent = 'Connecting to server…';
-    socket.emit('nexusWarmup', { phone: currentView });
-  }
-
-  socket && socket.on && (function(){
-    // bind warmup events after socket ready — re-bound on reconnect via _bindNexusSockets()
-  })();
-
-  function _bindNexusSockets() {
-    if (!socket) return;
-    socket.off('nexusWarmupProgress');
-    socket.off('nexusWarmupDone');
-    socket.off('nexusDecision');
-
-    socket.on('nexusWarmupProgress', function(d) {
-      var pct = d.maxPages > 0 ? Math.round(d.page / d.maxPages * 90) + 5 : 50;
-      $('nxWarmupFill').style.width = pct + '%';
-      $('nxWarmupStatus').textContent = d.status || ('Page ' + d.page + '/' + d.maxPages + ' → ' + d.total + ' records');
-    });
-
-    socket.on('nexusWarmupDone', function(d) {
-      $('nxWarmupFill').style.width = '100%';
-      if (!d.ok) {
-        $('nxWarmupStatus').textContent = '✗ Failed: ' + (d.msg || 'unknown error');
-        $('nxBtnWarmup').disabled = false;
-        $('nxBtnWarmup').textContent = '⚡ Warmup & Start';
-        return;
-      }
-      $('nxWarmupStatus').textContent = '✓ Warmed up on ' + d.total + ' records — auto-running';
-      $('nxHistoryInfo').textContent = d.total + ' records warmed up';
-      setTimeout(function(){ $('nxWarmupBar').style.display = 'none'; }, 2000);
-      $('nxBtnWarmup').textContent = '↺ Re-Warmup';
-      $('nxBtnWarmup').disabled = false;
-      // Auto-start
-      _nexusRunning = true;
-      $('nxBtnToggle').style.display = '';
-      $('nxBtnToggle').textContent = '⏹ Stop';
-      $('nxBtnToggle').style.background = 'linear-gradient(135deg,#dc2626,#991b1b)';
-      _updateNexusBadge('RUNNING');
-    });
-
-    socket.on('nexusDecision', function(d) { _handleNexusDecision(d); });
-  }
-
-  function nexusToggle() {
-    _nexusRunning = !_nexusRunning;
-    $('nxBtnToggle').textContent = _nexusRunning ? '⏹ Stop' : '▶ Resume';
-    $('nxBtnToggle').style.background = _nexusRunning
-      ? 'linear-gradient(135deg,#dc2626,#991b1b)'
-      : 'linear-gradient(135deg,#059669,#065f46)';
-    _updateNexusBadge(_nexusRunning ? 'RUNNING' : 'PAUSED');
-  }
-
-  // Called by socket.on('newDraw') every time a result arrives
-  function nexusOnDraw(issue, result, number) {
-    if (!_nexusRunning) return;
-    var nextIssue = String(parseInt(issue, 10) + 1);
-    socket.emit('nexusPredict', {
-      nextIssue:  nextIssue,
-      lastIssue:  _nexusLastIssue,
-      lastResult: _nexusLastResult,
-      lastPred:   _nexusLastPred,
-      lastPct:    _nexusLastPct,
-      lastReason: _nexusLastReason,
-      lastNumber: _nexusLastNum,
-    });
-    // save for next round feedback
-    _nexusLastIssue  = issue;
-    _nexusLastResult = result;
-    _nexusLastNum    = number;
-  }
-
-  function _handleNexusDecision(d) {
-    var stats = d.stats || {};
-    var isBig = d.pred === 'B';
-    var stake = d.stake || 1;
-    var level = d.level || 1;
-
-    // Update stats
-    $('nxBets').textContent  = stats.bets  != null ? stats.bets  : '—';
-    $('nxWins').textContent  = stats.wins  != null ? stats.wins  : '—';
-    $('nxAcc').textContent   = stats.acc   || '—';
-    $('nxRoll').textContent  = stats.rollAcc || '—';
-    var streak = stats.streak || 0;
-    $('nxStreak').textContent = streak > 0 ? '+'+streak : String(streak);
-    $('nxStreak').style.color = streak > 0 ? '#4ade80' : streak < 0 ? '#f87171' : '#888';
-    $('nxLevel').textContent  = 'L' + level;
-    $('nxLevel').style.color  = level >= 5 ? '#f87171' : level >= 3 ? '#fbbf24' : '#4ade80';
-    $('nxMaxL').textContent   = 'L' + (stats.maxLevel || 1);
-    $('nxMCL').textContent    = stats.maxConsecLoss != null ? stats.maxConsecLoss : '—';
-
-    // Prediction box
-    $('nexusPredBadge').textContent = isBig ? 'BIG' : 'SML';
-    $('nexusPredBadge').style.background = isBig ? 'rgba(248,113,113,0.15)' : 'rgba(96,165,250,0.15)';
-    $('nexusPredBadge').style.color      = isBig ? '#f87171' : '#60a5fa';
-    $('nexusSignal').textContent = '⚡ BET ' + (isBig ? 'BIG (≥5)' : 'SMALL (<5)') + '  ·  L' + level + '  ×' + stake;
-    $('nexusSignal').style.color = isBig ? '#f87171' : '#60a5fa';
-    $('nexusReason').textContent = d.reason || '—';
-    $('nexusConfPct').textContent = (d.pct || 0).toFixed(1) + '%';
-    $('nexusConfPct').style.color = d.pct >= 63 ? '#4ade80' : d.pct >= 55 ? '#fbbf24' : '#888';
-    $('nexusStakeLabel').textContent = 'stake ×' + stake;
-    $('nexusStakeLabel').style.color = level >= 5 ? '#f87171' : level >= 3 ? '#fbbf24' : '#6677aa';
-
-    _updateNexusBadge('BET');
-
-    // Store current prediction for next feedback
-    _nexusLastPred   = d.pred;
-    _nexusLastPct    = d.pct || 0;
-    _nexusLastReason = d.reason || '';
-
-    // History table
-    if (d.recentRows && d.recentRows.length > 0) _renderNexusHistory(d.recentRows);
-  }
-
-  function _renderNexusHistory(rows) {
-    var tbody = $('nxHistoryBody');
-    if (!tbody) return;
-    var html = '';
-    for (var i = rows.length - 1; i >= 0; i--) {
-      var r = rows[i];
-      var isWin  = r.result === 'WIN';
-      var isBigBS   = r.bs   === 'B';
-      var isBigPred = r.pred === 'B';
-      var lvl = r.level || 1;
-      var lvlColor = lvl >= 5 ? '#f87171' : lvl >= 3 ? '#fbbf24' : '#6677aa';
-      html += '<tr style="border-bottom:1px solid #111122">'
-        + '<td style="padding:3px 8px;color:#445">' + String(r.issue||'').slice(-8) + '</td>'
-        + '<td style="padding:3px 6px;color:#aaa;text-align:center">' + (r.number||'?') + '</td>'
-        + '<td style="padding:3px 6px;text-align:center;color:' + (isBigBS ? '#f87171' : '#60a5fa') + ';font-weight:700">' + (isBigBS ? 'BIG' : 'SML') + '</td>'
-        + '<td style="padding:3px 6px;text-align:center;color:' + (isBigPred ? '#f87171' : '#60a5fa') + ';font-weight:600">' + (r.pred === 'B' ? 'BIG' : r.pred === 'S' ? 'SML' : r.pred||'—') + '</td>'
-        + '<td style="padding:3px 6px;text-align:center;color:' + (r.pct >= 63 ? '#4ade80' : r.pct >= 55 ? '#fbbf24' : '#555') + '">' + (r.pct||0).toFixed(1) + '%</td>'
-        + '<td style="padding:3px 6px;text-align:center;color:' + lvlColor + ';font-weight:700">L' + lvl + '</td>'
-        + '<td style="padding:3px 6px;text-align:center;font-weight:700;color:' + (isWin ? '#4ade80' : '#f87171') + '">' + (isWin ? '✓W' : '✗L') + '</td>'
-        + '<td style="padding:3px 8px;color:#445;max-width:180px;overflow:hidden;text-overflow:ellipsis">' + (r.reason||'—').slice(0,50) + '</td>'
-        + '</tr>';
-    }
-    tbody.innerHTML = html || '<tr><td colspan="8" style="text-align:center;color:#333;padding:8px">— no history yet —</td></tr>';
-  }
-
-  function nexusResetStats() {
-    if (!socket) return;
-    socket.emit('nexusWarmup', { phone: currentView });
-    $('nxHistoryBody').innerHTML = '<tr><td colspan="8" style="text-align:center;color:#333;padding:12px">— no history yet —</td></tr>';
-    ['nxBets','nxWins','nxAcc','nxRoll','nxStreak','nxLevel','nxMaxL','nxMCL'].forEach(function(id){ $(id).textContent='—'; });
-    $('nexusPredBadge').textContent = '—';
-    $('nexusSignal').textContent = 'Waiting for next round…';
-    $('nexusReason').textContent = '—';
-    $('nexusConfPct').textContent = '—%';
-    _updateNexusBadge('IDLE');
-  }
-
-  function _updateNexusBadge(state) {
-    var badge = $('nexusBadge');
-    if (!badge) return;
-    var cfg = {
-      IDLE:    { text:'IDLE',    bg:'#1e1035', color:'#a78bfa' },
-      RUNNING: { text:'RUNNING', bg:'#052e16', color:'#4ade80' },
-      PAUSED:  { text:'PAUSED',  bg:'#2a1f00', color:'#fbbf24' },
-      BET:     { text:'BET ✓',   bg:'#052e16', color:'#4ade80' },
-    };
-    var c = cfg[state] || cfg.IDLE;
-    badge.textContent = c.text;
-    badge.style.background = c.bg;
-    badge.style.color = c.color;
-  }
+// ── Init ──────────────────────────────────────────────
+E.levels=buildLevels(E.cfg.baseAmt,E.cfg.maxLevel);
+if(accounts.length>0){showDashboard();}else{showLogin();}
 
 })();
 </script>
-<!-- ═══ FIREBASE ADMIN HELPERS ═══ -->
+
 <script>
-  // Copy device ID to clipboard
-  function copyDeviceId() {
-    var id = window.KP_DEVICE_ID || localStorage.getItem('KP_device_id') || 'Unknown';
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(id).then(function() {
-        alert('Device ID Copied!\n\nID: ' + id);
-      }).catch(function() {
-        prompt('Your Device ID:', id);
-      });
-    } else {
-      prompt('Your Device ID:', id);
-    }
-  }
-
-  // Open the real GOKU MODS Admin Panel (same Firebase project/database)
-  function openAdminPanel() {
-    window.open('/admin.html', '_blank');
-  }
+function copyDeviceId(){
+  var id=window.KP_DEVICE_ID||localStorage.getItem('KP_device_id')||'Unknown';
+  if(navigator.clipboard){navigator.clipboard.writeText(id).then(function(){alert('Copied!\n\nDevice ID: '+id);}).catch(function(){prompt('Your Device ID:',id);});}
+  else{prompt('Your Device ID:',id);}
+}
+function openAdminPanel(){window.open('admin.html','_blank');}
 </script>
-
-<script src="https://replit-cdn.com/replit-pill/replit-pill.global.js" data-repl-id="54ce0cac-2f71-4346-8c9b-c94692e48c21"></script></body>
+</body>
 </html>
