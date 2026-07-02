@@ -596,7 +596,7 @@
       reAuthAll();
       return;
     }
-    socket = io({ transports: ['websocket', 'polling'] });
+    socket = io('https://kingpin-production-b4d4.up.railway.app', { transports: ['websocket', 'polling'] });
 
     socket.on('connect', function() {
       console.log('[KP] Socket connected via ' + socket.io.engine.transport.name);
