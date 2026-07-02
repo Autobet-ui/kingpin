@@ -2,7 +2,7 @@
   "name": "kingpin-autobet",
   "version": "3.0.0",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server_v2.js"
   },
   "engines": {
     "node": ">=18"
