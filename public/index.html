@@ -113,7 +113,6 @@
       }
     });
   </script>
-
   <!-- Firebase Device Gate -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
@@ -144,8 +143,8 @@
       const data = snap.val();
       const gate = document.getElementById('fbDeviceGate');
       const statusEl = document.getElementById('fbGateStatus');
-      const dispEl = document.getElementById('fbDeviceIdDisplay');
-      if (dispEl) dispEl.textContent = deviceId;
+      if (document.getElementById('fbDeviceIdDisplay'))
+        document.getElementById('fbDeviceIdDisplay').textContent = deviceId;
       if (!data) {
         if (statusEl) { statusEl.style.color='#f87171'; statusEl.textContent='❌ Device not authorized. Send your Device ID to admin.'; }
         if (gate) gate.style.display='flex';
@@ -160,13 +159,12 @@
           window.KP_FIREBASE_AUTHORIZED=true;
           window.KP_PRO_ACCESS=(data.proRexen===true||data.pro_rexen_access===true);
           if (statusEl) {
-            statusEl.style.color='#4ade80'; statusEl.style.background='rgba(74,222,128,0.08)'; statusEl.style.borderColor='rgba(74,222,128,0.2)';
+            statusEl.style.color='#4ade80'; statusEl.style.background='rgba(74,222,128,0.08)';
+            statusEl.style.borderColor='rgba(74,222,128,0.2)';
             const days=data.expiry?Math.ceil((data.expiry-Date.now())/86400000):'∞';
             statusEl.textContent='✅ Access Granted! '+days+' day(s) remaining';
           }
-          if (gate) {
-            setTimeout(()=>{gate.style.opacity='0';gate.style.transform='scale(0.96)';setTimeout(()=>{gate.style.display='none';},450);},1200);
-          }
+          if (gate) { setTimeout(()=>{ gate.style.opacity='0'; gate.style.transform='scale(0.96)'; setTimeout(()=>{ gate.style.display='none'; },450); },1200); }
         }
       } else {
         if (statusEl) { statusEl.style.color='#fbbf24'; statusEl.textContent='🔒 Account inactive. Contact admin.'; }
@@ -178,8 +176,8 @@
 </head>
 <body>
 
-<!-- ═══ FIREBASE DEVICE GATE ═══ -->
-<div id="fbDeviceGate" style="position:fixed;inset:0;z-index:99999;background:radial-gradient(ellipse at 50% 0%,#1A1A3E 0%,#07070F 70%);display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;transition:opacity 0.5s ease,transform 0.5s ease">
+<!-- FIREBASE DEVICE GATE -->
+<div id="fbDeviceGate" style="position:fixed;inset:0;z-index:99999;background:radial-gradient(ellipse at 50% 0%,#1A1A3E 0%,#07070F 70%);display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;transition:opacity 0.5s ease,transform 0.5s ease">
   <div style="text-align:center;padding:30px 24px;max-width:340px;width:100%">
     <div style="font-size:28px;font-weight:900;letter-spacing:3px;color:#fff;margin-bottom:4px;font-family:'Orbitron',sans-serif">KINGPIN</div>
     <div style="font-size:11px;color:#6677aa;letter-spacing:2px;margin-bottom:24px">DEVICE VERIFICATION</div>
