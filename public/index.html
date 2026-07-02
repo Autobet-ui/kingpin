@@ -573,6 +573,8 @@
     dashboard.style.display = '';
     applyKeyPermissions();
     connectSocket();
+    buildFormulaSelector();
+    refreshBalance();
   }
 
   function formatPnl(v) {
@@ -704,47 +706,248 @@
     });
   }
 
-  /* ═══ CLIENT-SIDE BALANCE FETCH (bypasses Railway IP block) ═══ */
-  var GOA_WEBAPI = 'https://api.goa7777.com/api/webapi';
-  var BALANCE_ENDPOINTS = ['/Member/GetUserInfo','/User/GetUserInfo','/User/GetInfo','/Member/UserInfo'];
+  /* ═══ BALANCE — server proxy (Railway fetches for us) ═══ */
+  var RAILWAY = 'https://kingpin-production-b4d4.up.railway.app';
 
-  async function fetchBalanceFromBrowser(token) {
+  async function fetchBalanceViaServer(token) {
     if (!token) return 0;
-    for (var ep of BALANCE_ENDPOINTS) {
-      try {
-        var r = await fetch(GOA_WEBAPI + ep, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'Authorization': 'Bearer ' + token, 'token': token },
-          body: JSON.stringify({})
-        });
-        var d = await r.json();
-        if (d && d.code === 0 && d.data) {
-          var data = d.data;
-          var cands = [data.money, data.balance, data.wallet, data.mainBalance, data.normalBalance,
-            data.rechargeBalance, data.totalBalance, data.coinBalance, data.amount, data.availableBalance,
-            data.userInfo && data.userInfo.money, data.userInfo && data.userInfo.balance
-          ].map(function(v){ return parseFloat(v||0); }).filter(function(n){ return !isNaN(n) && n >= 0; });
-          if (cands.length > 0) return Math.max.apply(null, cands);
-        }
-      } catch(e) { /* try next */ }
-    }
+    try {
+      var r = await fetch(RAILWAY + '/api/balance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: token })
+      });
+      var d = await r.json();
+      if (d && d.code === 0 && d.balance > 0) return parseFloat(d.balance);
+    } catch(e) {}
     return 0;
   }
 
-  async function refreshBalanceFromBrowser() {
+  async function refreshBalance() {
     var acct = accounts.find(function(a){ return a.phone === currentView; });
     if (!acct) return;
     var token = acct.webapiToken || acct.lotteryToken;
-    var bal = await fetchBalanceFromBrowser(token);
-    $('abBalance').textContent = '₹' + bal.toFixed(2);
-    // Also tell server so it stays in sync
-    if (socket && socket.connected) socket.emit('refreshBalance', { phone: currentView });
+    // Use stored balance if server returns 0
+    var bal = await fetchBalanceViaServer(token);
+    if (bal > 0) {
+      acct.balance = bal;
+      saveAccounts();
+      $('abBalance').textContent = '₹' + bal.toFixed(2);
+    } else if (acct.balance > 0) {
+      $('abBalance').textContent = '₹' + parseFloat(acct.balance).toFixed(2);
+    }
   }
 
-  // Auto-refresh balance every 15 seconds
+  // Refresh balance every 20 seconds
   setInterval(function(){
-    if (currentView && accounts.length > 0) refreshBalanceFromBrowser();
-  }, 15000);
+    if (currentView && accounts.length > 0) refreshBalance();
+  }, 20000);
+
+  /* ═══ ALL 16 FORMULA ENGINES (client-side) ═══ */
+  var _grrIdx = 0;
+  var CLIENT_FORMULAS = {
+    shadow: { name:'⚡ Shadow Adaptive v14.0', fn: function(list, lvl, losses) {
+      var seq=list.map(function(x){return parseInt(x.number||0)>=5?'B':'S';});
+      if(seq.length<6) return {pred:'BIG',conf:55};
+      var streak=1; for(var i=1;i<seq.length;i++){if(seq[i]===seq[0])streak++;else break;}
+      var opp=seq[0]==='B'?'SMALL':'BIG', same=seq[0]==='B'?'BIG':'SMALL';
+      if(streak>=5) return {pred:opp,conf:92}; if(streak>=4) return {pred:opp,conf:85};
+      var V={BIG:0,SMALL:0};
+      function v(s,p){V[s]+=p;}
+      if(streak>=3)v(opp,streak*11); else v(same,6);
+      var h5=seq.slice(0,5);
+      if(h5.length>=5&&h5.every(function(x,i){return i===0||x!==h5[i-1];}))v(opp,28);
+      var L10=seq.slice(0,10),b10=L10.filter(function(x){return x==='B';}).length,s10=L10.length-b10;
+      if(b10>=7)v('SMALL',22); else if(s10>=7)v('BIG',22); else v(b10>=s10?'BIG':'SMALL',4);
+      if(seq.length>=3&&seq[0]===seq[1]&&seq[1]===seq[2])v(opp,20);
+      if(seq.length>=4&&seq[0]===seq[1]&&seq[2]===seq[3]&&seq[0]!==seq[2])v(opp,18);
+      if(seq.length>=3&&seq[0]===seq[2]&&seq[0]!==seq[1])v(seq[1]==='B'?'BIG':'SMALL',14);
+      var b5=seq.slice(0,5).filter(function(x){return x==='B';}).length;
+      if(b5>=4)v('SMALL',14); else if(5-b5>=4)v('BIG',14);
+      if(seq.length>=30){var b30=seq.slice(0,30).filter(function(x){return x==='B';}).length;if(b30>=19)v('SMALL',10);else if(30-b30>=19)v('BIG',10);}
+      var tot=V.BIG+V.SMALL; if(!tot) return {pred:'BIG',conf:55};
+      var pF=V.BIG>V.SMALL?'BIG':'SMALL';
+      var conf=Math.round(Math.min(95,Math.max(50,(V[pF]/tot)*100+Math.min(Math.abs(V.BIG-V.SMALL)*0.3,8))));
+      var thr=(losses||0)>=2?72:63;
+      return {pred:pF,conf:conf,skip:conf<thr};
+    }},
+    FHaa: { name:'🔁 FHaa (GRR Loop)', fn: function(list,lvl) {
+      var GRR=['BIG','SMALL','SMALL']; var pos=_grrIdx%3; _grrIdx++;
+      var pred=GRR[pos]; if((lvl||1)>=8) pred=pred==='BIG'?'SMALL':'BIG';
+      return {pred:pred,conf:75};
+    }},
+    eip: { name:'🤖 EIP (Interval Pattern)', fn: function(list) {
+      var seq=list.map(function(x){return parseInt(x.number||0)>=5?'B':'S';});
+      if(seq.length<4) return {pred:'BIG',conf:55};
+      var bP=[],sP=[]; seq.slice(0,20).forEach(function(v,i){if(v==='B')bP.push(i);else sP.push(i);});
+      function avg(p){if(p.length<2)return 2;var s=0;for(var i=1;i<p.length;i++)s+=p[i]-p[i-1];return s/(p.length-1);}
+      var bA=avg(bP),sA=avg(sP),bD=(bP[0]||9)/bA,sD=(sP[0]||9)/sA;
+      var pred=bD>=sD?'BIG':'SMALL';
+      return {pred:pred,conf:Math.round(Math.min(85,55+Math.abs(bD-sD)*10))};
+    }},
+    zigzag: { name:'⚡ ZigZag', fn: function(list) {
+      var seq=list.map(function(x){return parseInt(x.number||0)>=5?'B':'S';});
+      return {pred:seq[0]==='B'?'SMALL':'BIG',conf:62};
+    }},
+    oracle: { name:'🔮 ORACLE', fn: function(list) {
+      var seq=list.map(function(x){return parseInt(x.number||0)>=5?'B':'S';});
+      if(seq.length<5) return {pred:seq[0]==='B'?'SMALL':'BIG',conf:62};
+      var b=seq.slice(0,10).filter(function(x){return x==='B';}).length;
+      if(b>=7) return {pred:'SMALL',conf:72}; if(b<=3) return {pred:'BIG',conf:72};
+      return {pred:seq[0]==='B'?'SMALL':'BIG',conf:62};
+    }},
+    kaala: { name:'🕶️ Kaala', fn: function(list) {
+      var seq=list.map(function(x){return parseInt(x.number||0)>=5?'B':'S';});
+      var streak=1; for(var i=1;i<seq.length;i++){if(seq[i]===seq[0])streak++;else break;}
+      if(streak>=4) return {pred:seq[0]==='B'?'SMALL':'BIG',conf:80};
+      var b=seq.slice(0,10).filter(function(x){return x==='B';}).length;
+      if(b>=7) return {pred:'SMALL',conf:72}; if(b<=3) return {pred:'BIG',conf:72};
+      return {pred:seq[0]==='B'?'SMALL':'BIG',conf:62};
+    }},
+    dna3: { name:'🧬 DNA 3', fn: function(list) {
+      var seq=list.map(function(x){return parseInt(x.number||0)>=5?'B':'S';});
+      if(seq.length<3) return {pred:'BIG',conf:60};
+      var t=seq.slice(0,3).join('-');
+      var P={'B-B-B':'SMALL','S-S-S':'BIG','B-S-B':'SMALL','S-B-S':'BIG','B-B-S':'BIG','S-S-B':'SMALL','B-S-S':'BIG','S-B-B':'SMALL'};
+      return {pred:P[t]||'BIG',conf:P[t]?70:60};
+    }},
+    titan_v3: { name:'⚡ TITAN v3', fn: function(list,lvl,losses) {
+      var seq=list.map(function(x){return parseInt(x.number||0)>=5?'B':'S';});
+      if((losses||0)>=3) return {pred:seq[0]==='B'?'SMALL':'BIG',conf:78};
+      var b=seq.slice(0,10).filter(function(x){return x==='B';}).length;
+      if(b>=7) return {pred:'SMALL',conf:72}; if(b<=3) return {pred:'BIG',conf:72};
+      return {pred:seq[0]==='B'?'SMALL':'BIG',conf:62};
+    }},
+    kingpin3: { name:'👑 KINGPIN 3.0', fn: function(list) {
+      var seq=list.map(function(x){return parseInt(x.number||0)>=5?'B':'S';});
+      if(seq.length<2) return {pred:'BIG',conf:60};
+      var v=0; if(seq[0]==='B')v++; if(seq[1]==='S')v++; if((seq[0]==='B')===(seq[1]==='B'))v++;
+      var streak=1; for(var i=1;i<seq.length;i++){if(seq[i]===seq[0])streak++;else break;}
+      if(streak>=3)v++;
+      return {pred:v>=2?'BIG':'SMALL',conf:65};
+    }},
+    n1n2: { name:'🎲 N1/N2', fn: function(list) {
+      var nums=list.slice(0,10).map(function(x){return parseInt(x.number||0);});
+      if(nums.length<3) return {pred:'BIG',conf:58};
+      var avg=(nums[0]+nums[1]+nums[2])/3;
+      return {pred:avg>=5?'BIG':'SMALL',conf:62};
+    }},
+    hacksoon: { name:'🔮 Hacksoon', fn: function(list) {
+      var seq=list.map(function(x){return parseInt(x.number||0)>=5?'B':'S';});
+      if(seq.length<5) return {pred:'BIG',conf:60};
+      var zigzag=seq.slice(0,4).every(function(v,i){return i===0||v!==seq[i-1];});
+      if(zigzag) return {pred:seq[0]==='B'?'SMALL':'BIG',conf:74};
+      var streak=1; for(var i=1;i<seq.length;i++){if(seq[i]===seq[0])streak++;else break;}
+      if(streak>=3) return {pred:seq[0]==='B'?'SMALL':'BIG',conf:72};
+      var b=seq.slice(0,10).filter(function(x){return x==='B';}).length;
+      if(b>=7) return {pred:'SMALL',conf:72}; if(b<=3) return {pred:'BIG',conf:72};
+      return {pred:seq[0]==='B'?'SMALL':'BIG',conf:62};
+    }},
+    kubera: { name:'💰 Kubera v2', fn: function(list) {
+      var seq=list.map(function(x){return parseInt(x.number||0)>=5?'B':'S';});
+      if(seq.length<5) return {pred:'BIG',conf:60};
+      var score=0; [5,4,3,2,1].forEach(function(w,i){score+=seq[i]==='B'?w:-w;});
+      var conf=Math.min(85,55+Math.abs(score)*2);
+      return {pred:score>0?'BIG':'SMALL',conf:Math.round(conf)};
+    }},
+    itachi: { name:'🔥 Itachi V30', fn: function(list) {
+      var seq=list.map(function(x){return parseInt(x.number||0)>=5?'B':'S';});
+      if(seq.length<6) return {pred:'BIG',conf:60};
+      var b3=seq.slice(0,3).filter(function(x){return x==='B';}).length;
+      var streak=1; for(var i=1;i<seq.length;i++){if(seq[i]===seq[0])streak++;else break;}
+      if(streak>=4) return {pred:seq[0]==='B'?'SMALL':'BIG',conf:82};
+      return {pred:b3>=2?'BIG':'SMALL',conf:streak>=2?70:63};
+    }},
+    zn1p: { name:'🗳️ ZN1P', fn: function(list) {
+      var nums=list.slice(0,10).map(function(x){return parseInt(x.number||0);});
+      if(nums.length<3) return {pred:'BIG',conf:60};
+      var z=nums.filter(function(n){return n===0||n===5;}).length;
+      if(z>nums.length-z) return {pred:nums[0]>=5?'SMALL':'BIG',conf:68};
+      return {pred:nums[0]>=5?'BIG':'SMALL',conf:63};
+    }},
+    kutty: { name:'⭐ KUTTY', fn: function(list) {
+      var seq=list.map(function(x){return parseInt(x.number||0)>=5?'B':'S';});
+      if(seq.length<4) return {pred:'BIG',conf:60};
+      var b=seq.slice(0,4).filter(function(x){return x==='B';}).length;
+      return {pred:b>=3?'BIG':b<=1?'SMALL':seq[0]==='B'?'SMALL':'BIG',conf:65};
+    }},
+    sum: { name:'∑ SUM Formula', fn: function(list) {
+      if(!list||!list.length) return {pred:'BIG',conf:60};
+      var last=String(list[0].issueNumber||list[0].issue||'0');
+      try {
+        var next=String(BigInt(last)+1n);
+        if(next.length<5) return {pred:'BIG',conf:60};
+        var s=next.slice(-5).split('').reduce(function(a,c){return a+parseInt(c);},0);
+        var d=Math.floor((s/3))%10;
+        return {pred:d<=4?'BIG':'SMALL',conf:72};
+      } catch(e){ return {pred:'BIG',conf:60}; }
+    }},
+  };
+
+  var _activeFormula = 'shadow';
+
+  function runClientFormula(list, lvl, losses) {
+    var f = CLIENT_FORMULAS[_activeFormula] || CLIENT_FORMULAS.shadow;
+    try { return f.fn(list, lvl, losses); } catch(e) { return {pred:'BIG',conf:55}; }
+  }
+
+  /* ═══ FORMULA SELECTOR UI ═══ */
+  function buildFormulaSelector() {
+    var container = $('abFormulaActive');
+    if (!container) return;
+    container.style.cursor = 'pointer';
+    container.innerHTML = '';
+
+    // Current formula display
+    var display = document.createElement('div');
+    display.style.cssText = 'display:flex;align-items:center;justify-content:space-between;width:100%';
+    var nameSpan = document.createElement('span');
+    nameSpan.id = 'abFormulaName';
+    nameSpan.textContent = CLIENT_FORMULAS[_activeFormula].name;
+    var badge = document.createElement('span');
+    badge.style.cssText = 'font-size:10px;color:#4ade80;letter-spacing:.06em';
+    badge.textContent = 'ACTIVE ● ▼';
+    display.appendChild(nameSpan); display.appendChild(badge);
+    container.appendChild(display);
+
+    // Dropdown
+    var dropdown = document.createElement('div');
+    dropdown.id = 'abFormulaDropdown';
+    dropdown.style.cssText = 'display:none;position:absolute;left:0;right:0;background:#0d0d1a;border:1px solid rgba(74,222,128,0.3);border-radius:10px;z-index:999;max-height:220px;overflow-y:auto;margin-top:4px;box-shadow:0 8px 24px rgba(0,0,0,0.5)';
+
+    Object.keys(CLIENT_FORMULAS).forEach(function(key) {
+      var opt = document.createElement('div');
+      opt.style.cssText = 'padding:10px 14px;cursor:pointer;font-size:12px;color:#b0b0cc;border-bottom:1px solid rgba(255,255,255,0.05);transition:background 0.15s';
+      opt.textContent = CLIENT_FORMULAS[key].name;
+      if (key === _activeFormula) { opt.style.color = '#4ade80'; opt.style.fontWeight = '700'; }
+      opt.addEventListener('mouseenter', function(){ opt.style.background='rgba(74,222,128,0.08)'; });
+      opt.addEventListener('mouseleave', function(){ opt.style.background=''; });
+      opt.addEventListener('click', function(e) {
+        e.stopPropagation();
+        _activeFormula = key;
+        if (socket && socket.connected && currentView) socket.emit('setFormula', { phone: currentView, formula: key });
+        dropdown.style.display = 'none';
+        buildFormulaSelector();
+        toast('🧠 Formula', CLIENT_FORMULAS[key].name + ' selected', 'info');
+      });
+      dropdown.appendChild(opt);
+    });
+
+    var wrap = document.createElement('div');
+    wrap.style.cssText = 'position:relative';
+    wrap.appendChild(display);
+    wrap.appendChild(dropdown);
+    container.innerHTML = '';
+    container.appendChild(wrap);
+
+    container.addEventListener('click', function(e) {
+      e.stopPropagation();
+      dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+    });
+    document.addEventListener('click', function() { dropdown.style.display = 'none'; });
+  }
+
+  // Auto-refresh balance every 20 seconds
 
   /* ═══ CLIENT-SIDE WINGO POLLER (bypasses Railway IP block) ═══ */
   var WINGO_URLS = [
@@ -819,33 +1022,18 @@
     return [];
   }
 
-  function clientPredict(rawList) {
-    var seq = rawList.map(function(item) {
-      var n = parseInt(String(item.number || item.num || '0'));
-      return n >= 5 ? 'B' : 'S';
-    });
-    if (seq.length < 6) return { pred: 'BIG', conf: 55 };
-    var V = { BIG: 0, SMALL: 0 };
-    function vote(s, p) { V[s] += p; }
-    var streak = 1;
-    for (var i = 1; i < seq.length; i++) { if (seq[i] === seq[0]) streak++; else break; }
-    var opp = seq[0] === 'B' ? 'SMALL' : 'BIG';
-    var same = seq[0] === 'B' ? 'BIG' : 'SMALL';
-    if (streak >= 5) return { pred: opp, conf: 92 };
-    if (streak >= 4) return { pred: opp, conf: 85 };
-    if (streak >= 3) vote(opp, streak * 11);
-    else vote(same, 6);
-    var h5 = seq.slice(0, 5);
-    if (h5.length >= 5 && h5.every(function(v, i) { return i === 0 || v !== h5[i-1]; })) vote(opp, 28);
-    var L10 = seq.slice(0, 10);
-    var b10 = L10.filter(function(x){ return x==='B'; }).length, s10 = L10.length - b10;
-    if (b10 >= 7) vote('SMALL', 22); else if (s10 >= 7) vote('BIG', 22); else vote(b10 >= s10 ? 'BIG' : 'SMALL', 4);
-    if (seq.length >= 3 && seq[0] === seq[1] && seq[1] === seq[2]) vote(opp, 20);
-    var total = V.BIG + V.SMALL;
-    if (!total) return { pred: 'BIG', conf: 55 };
-    var pred = V.BIG > V.SMALL ? 'BIG' : 'SMALL';
-    var conf = Math.round(Math.min(95, Math.max(50, (V[pred] / total) * 100 + Math.abs(V.BIG - V.SMALL) * 0.3)));
-    return { pred: pred, conf: conf };
+  function updatePredUI(result) {
+    if (!result) return;
+    var predEl = $('abPred');
+    if (predEl) { predEl.textContent = result.pred; predEl.className = 'ab-hero-pred pred-' + result.pred.toLowerCase(); }
+    var confFill = $('abConfFill'), confPct = $('abConfPct'), confRow = $('abConfRow');
+    if (confRow) confRow.style.display = 'flex';
+    var lvl = (result.conf||0) >= 80 ? 'high' : (result.conf||0) >= 65 ? 'mid' : 'low';
+    if (confFill) { confFill.style.width = (result.conf||0) + '%'; confFill.className = 'kp-conf-fill ' + lvl; }
+    if (confPct) { confPct.textContent = (result.conf||0) + '%'; confPct.className = 'kp-conf-pct ' + lvl; }
+    // Update formula name display
+    var fn = $('abFormulaName');
+    if (fn && CLIENT_FORMULAS[_activeFormula]) fn.textContent = CLIENT_FORMULAS[_activeFormula].name;
   }
 
   // Run client prediction every 8 seconds
@@ -853,16 +1041,11 @@
     if (!currentView || accounts.length === 0) return;
     var list = await fetchWingoHistory(30);
     if (!list || list.length < 6) return;
-    var result = clientPredict(list);
-    var predEl = $('abPred');
-    if (predEl) {
-      predEl.textContent = result.pred;
-      predEl.className = 'ab-hero-pred pred-' + result.pred.toLowerCase();
-    }
-    var confFill = $('abConfFill'), confPct = $('abConfPct'), confRow = $('abConfRow');
-    if (confRow) confRow.style.display = 'flex';
-    if (confFill) { confFill.style.width = result.conf + '%'; confFill.className = 'kp-conf-fill ' + (result.conf >= 80 ? 'high' : result.conf >= 65 ? 'mid' : 'low'); }
-    if (confPct) { confPct.textContent = result.conf + '%'; confPct.className = 'kp-conf-pct ' + (result.conf >= 80 ? 'high' : result.conf >= 65 ? 'mid' : 'low'); }
+    var acct = accounts.find(function(a){ return a.phone === currentView; });
+    var losses = acct ? (acct.losses || 0) : 0;
+    var level = acct ? (acct.level || 1) : 1;
+    var result = runClientFormula(list, level, losses);
+    updatePredUI(result);
   }, 8000);
 
   /* ── Re-auth all saved accounts on connect ── */
@@ -1408,7 +1591,10 @@
         saveAccounts();
 
         // Show balance immediately from login response
-        if (loginBal > 0) $('abBalance').textContent = '₹' + loginBal.toFixed(2);
+        if (loginBal > 0) {
+          $('abBalance').textContent = '₹' + loginBal.toFixed(2);
+          acctEntry.balance = loginBal;
+        }
 
         status('✅ Login success!', true);
         toast('Logged In', 'Welcome ' + phone, 'info');
