@@ -113,7 +113,8 @@
       }
     });
   </script>
-  <!-- Firebase Device Gate -->
+
+  <!-- ═══ FIREBASE DEVICE GATE ═══ -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
@@ -130,8 +131,8 @@
     const db  = getDatabase(app);
     let deviceId = localStorage.getItem('KP_device_id');
     if (!deviceId) {
-      const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-      deviceId = Array.from({length:12},()=>chars[Math.floor(Math.random()*chars.length)]).join('');
+      const c = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      deviceId = Array.from({length:12},()=>c[Math.floor(Math.random()*c.length)]).join('');
       localStorage.setItem('KP_device_id', deviceId);
     }
     window.KP_DEVICE_ID = deviceId;
@@ -140,34 +141,33 @@
       if (el) el.textContent = deviceId;
     });
     onValue(ref(db, 'approved_devices/' + deviceId), snap => {
-      const data = snap.val();
+      const d   = snap.val();
       const gate = document.getElementById('fbDeviceGate');
-      const statusEl = document.getElementById('fbGateStatus');
-      if (document.getElementById('fbDeviceIdDisplay'))
-        document.getElementById('fbDeviceIdDisplay').textContent = deviceId;
-      if (!data) {
-        if (statusEl) { statusEl.style.color='#f87171'; statusEl.textContent='❌ Device not authorized. Send your Device ID to admin.'; }
+      const sts  = document.getElementById('fbGateStatus');
+      const did  = document.getElementById('fbDeviceIdDisplay');
+      if (did) did.textContent = deviceId;
+      if (!d) {
+        if (sts) { sts.style.color='#f87171'; sts.textContent='❌ Device not authorized. Send your Device ID to admin.'; }
         if (gate) gate.style.display='flex';
         window.KP_FIREBASE_AUTHORIZED=false; window.KP_PRO_ACCESS=false; return;
       }
-      if (data.status === 'active') {
-        if (data.expiry && Date.now() > data.expiry) {
-          if (statusEl) { statusEl.style.color='#fbbf24'; statusEl.textContent='⏰ Subscription Expired! Contact admin.'; }
+      if (d.status === 'active') {
+        if (d.expiry && Date.now() > d.expiry) {
+          if (sts) { sts.style.color='#fbbf24'; sts.textContent='⏰ Subscription Expired!'; }
           if (gate) gate.style.display='flex';
           window.KP_FIREBASE_AUTHORIZED=false; window.KP_PRO_ACCESS=false;
         } else {
-          window.KP_FIREBASE_AUTHORIZED=true;
-          window.KP_PRO_ACCESS=(data.proRexen===true||data.pro_rexen_access===true);
-          if (statusEl) {
-            statusEl.style.color='#4ade80'; statusEl.style.background='rgba(74,222,128,0.08)';
-            statusEl.style.borderColor='rgba(74,222,128,0.2)';
-            const days=data.expiry?Math.ceil((data.expiry-Date.now())/86400000):'∞';
-            statusEl.textContent='✅ Access Granted! '+days+' day(s) remaining';
+          window.KP_FIREBASE_AUTHORIZED = true;
+          window.KP_PRO_ACCESS = (d.proRexen===true||d.pro_rexen_access===true);
+          if (sts) {
+            sts.style.color='#4ade80'; sts.style.background='rgba(74,222,128,.08)'; sts.style.borderColor='rgba(74,222,128,.2)';
+            const days = d.expiry ? Math.ceil((d.expiry-Date.now())/86400000) : '∞';
+            sts.textContent = '✅ Access Granted! ' + days + ' day(s) remaining';
           }
-          if (gate) { setTimeout(()=>{ gate.style.opacity='0'; gate.style.transform='scale(0.96)'; setTimeout(()=>{ gate.style.display='none'; },450); },1200); }
+          if (gate) setTimeout(()=>{ gate.style.opacity='0'; gate.style.transform='scale(.96)'; setTimeout(()=>{ gate.style.display='none'; },450); }, 1200);
         }
       } else {
-        if (statusEl) { statusEl.style.color='#fbbf24'; statusEl.textContent='🔒 Account inactive. Contact admin.'; }
+        if (sts) { sts.style.color='#fbbf24'; sts.textContent='🔒 Account inactive. Contact admin.'; }
         if (gate) gate.style.display='flex';
         window.KP_FIREBASE_AUTHORIZED=false; window.KP_PRO_ACCESS=false;
       }
@@ -177,17 +177,17 @@
 <body>
 
 <!-- FIREBASE DEVICE GATE -->
-<div id="fbDeviceGate" style="position:fixed;inset:0;z-index:99999;background:radial-gradient(ellipse at 50% 0%,#1A1A3E 0%,#07070F 70%);display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;transition:opacity 0.5s ease,transform 0.5s ease">
+<div id="fbDeviceGate" style="position:fixed;inset:0;z-index:99999;background:radial-gradient(ellipse at 50% 0%,#1A1A3E 0%,#07070F 70%);display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;transition:opacity .5s,transform .5s">
   <div style="text-align:center;padding:30px 24px;max-width:340px;width:100%">
     <div style="font-size:28px;font-weight:900;letter-spacing:3px;color:#fff;margin-bottom:4px;font-family:'Orbitron',sans-serif">KINGPIN</div>
     <div style="font-size:11px;color:#6677aa;letter-spacing:2px;margin-bottom:24px">DEVICE VERIFICATION</div>
-    <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:20px;margin-bottom:20px">
+    <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:20px;margin-bottom:16px">
       <div style="font-size:10px;color:#555577;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Your Device ID</div>
-      <div id="fbDeviceIdDisplay" style="font-size:13px;color:#a78bfa;font-weight:700;letter-spacing:1px;word-break:break-all;margin-bottom:10px">Loading...</div>
-      <button onclick="(function(){var id=window.KP_DEVICE_ID||'Unknown';navigator.clipboard?navigator.clipboard.writeText(id).then(function(){alert('Copied!\n\n'+id);}):prompt('Device ID:',id);})()" style="background:rgba(108,99,255,0.15);border:1px solid rgba(108,99,255,0.3);color:#a78bfa;padding:6px 16px;border-radius:8px;font-size:11px;cursor:pointer;font-family:inherit">📋 Copy ID</button>
+      <div id="fbDeviceIdDisplay" style="font-size:13px;color:#a78bfa;font-weight:700;word-break:break-all;margin-bottom:10px">Loading...</div>
+      <button onclick="(function(){var id=window.KP_DEVICE_ID||'?';if(navigator.clipboard)navigator.clipboard.writeText(id).then(()=>alert('✅ Copied!\n\n'+id));else prompt('Device ID:',id);})()" style="background:rgba(108,99,255,.15);border:1px solid rgba(108,99,255,.3);color:#a78bfa;padding:6px 16px;border-radius:8px;font-size:11px;cursor:pointer">📋 Copy ID</button>
     </div>
-    <div id="fbGateStatus" style="min-height:40px;font-size:12px;color:#fbbf24;text-align:center;margin-bottom:16px;padding:10px;background:rgba(251,191,36,0.08);border-radius:8px;border:1px solid rgba(251,191,36,0.15)">⏳ Checking device...</div>
-    <button onclick="window.open('https://t.me/KINGPIN3BOT','_blank')" style="width:100%;padding:13px;background:linear-gradient(135deg,#6C63FF,#00D4FF);border:none;border-radius:10px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;letter-spacing:1px">📩 Contact Admin to Activate</button>
+    <div id="fbGateStatus" style="min-height:40px;font-size:12px;color:#fbbf24;text-align:center;margin-bottom:16px;padding:10px;background:rgba(251,191,36,.08);border-radius:8px;border:1px solid rgba(251,191,36,.15)">⏳ Checking device...</div>
+    <button onclick="window.open('https://t.me/KINGPIN3BOT','_blank')" style="width:100%;padding:13px;background:linear-gradient(135deg,#6C63FF,#00D4FF);border:none;border-radius:10px;color:#fff;font-size:13px;font-weight:700;cursor:pointer">📩 Contact Admin to Activate</button>
   </div>
 </div>
 
