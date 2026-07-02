@@ -785,6 +785,7 @@
   }
 
   // Poll WinGo every 5 seconds from browser
+  var _wingoHistory = [];
   setInterval(async function() {
     if (!currentView || accounts.length === 0) return;
     var item = await fetchWingoFromBrowser();
@@ -803,6 +804,66 @@
       startClientCountdown(rem, periodSec);
     }
   }, 5000);
+
+  /* ═══ CLIENT-SIDE PREDICTION ENGINE ═══ */
+  async function fetchWingoHistory(size) {
+    for (var url of WINGO_URLS) {
+      try {
+        var r = await fetch(url + '?pageNo=1&pageSize=' + (size||30) + '&gameId=1&t=' + Date.now(), { headers: { 'Accept': 'application/json' } });
+        var json = await r.json();
+        var data = json.data || json;
+        var list = data.list || data.issueList || data.data || (Array.isArray(json) ? json : []);
+        if (Array.isArray(list) && list.length > 0) return list;
+      } catch(e) {}
+    }
+    return [];
+  }
+
+  function clientPredict(rawList) {
+    var seq = rawList.map(function(item) {
+      var n = parseInt(String(item.number || item.num || '0'));
+      return n >= 5 ? 'B' : 'S';
+    });
+    if (seq.length < 6) return { pred: 'BIG', conf: 55 };
+    var V = { BIG: 0, SMALL: 0 };
+    function vote(s, p) { V[s] += p; }
+    var streak = 1;
+    for (var i = 1; i < seq.length; i++) { if (seq[i] === seq[0]) streak++; else break; }
+    var opp = seq[0] === 'B' ? 'SMALL' : 'BIG';
+    var same = seq[0] === 'B' ? 'BIG' : 'SMALL';
+    if (streak >= 5) return { pred: opp, conf: 92 };
+    if (streak >= 4) return { pred: opp, conf: 85 };
+    if (streak >= 3) vote(opp, streak * 11);
+    else vote(same, 6);
+    var h5 = seq.slice(0, 5);
+    if (h5.length >= 5 && h5.every(function(v, i) { return i === 0 || v !== h5[i-1]; })) vote(opp, 28);
+    var L10 = seq.slice(0, 10);
+    var b10 = L10.filter(function(x){ return x==='B'; }).length, s10 = L10.length - b10;
+    if (b10 >= 7) vote('SMALL', 22); else if (s10 >= 7) vote('BIG', 22); else vote(b10 >= s10 ? 'BIG' : 'SMALL', 4);
+    if (seq.length >= 3 && seq[0] === seq[1] && seq[1] === seq[2]) vote(opp, 20);
+    var total = V.BIG + V.SMALL;
+    if (!total) return { pred: 'BIG', conf: 55 };
+    var pred = V.BIG > V.SMALL ? 'BIG' : 'SMALL';
+    var conf = Math.round(Math.min(95, Math.max(50, (V[pred] / total) * 100 + Math.abs(V.BIG - V.SMALL) * 0.3)));
+    return { pred: pred, conf: conf };
+  }
+
+  // Run client prediction every 8 seconds
+  setInterval(async function() {
+    if (!currentView || accounts.length === 0) return;
+    var list = await fetchWingoHistory(30);
+    if (!list || list.length < 6) return;
+    var result = clientPredict(list);
+    var predEl = $('abPred');
+    if (predEl) {
+      predEl.textContent = result.pred;
+      predEl.className = 'ab-hero-pred pred-' + result.pred.toLowerCase();
+    }
+    var confFill = $('abConfFill'), confPct = $('abConfPct'), confRow = $('abConfRow');
+    if (confRow) confRow.style.display = 'flex';
+    if (confFill) { confFill.style.width = result.conf + '%'; confFill.className = 'kp-conf-fill ' + (result.conf >= 80 ? 'high' : result.conf >= 65 ? 'mid' : 'low'); }
+    if (confPct) { confPct.textContent = result.conf + '%'; confPct.className = 'kp-conf-pct ' + (result.conf >= 80 ? 'high' : result.conf >= 65 ? 'mid' : 'low'); }
+  }, 8000);
 
   /* ── Re-auth all saved accounts on connect ── */
   function reAuthAll() {
@@ -1322,11 +1383,22 @@
         }
         if (!lt && d.token) lt = d.token;
 
+        // Extract balance from login response directly
+        var loginBal = 0;
+        var balCands = [
+          d.money, d.balance, d.wallet, d.mainBalance, d.normalBalance,
+          d.rechargeBalance, d.totalBalance, d.coinBalance, d.amount,
+          d.userInfo && d.userInfo.money, d.userInfo && d.userInfo.balance,
+          d.userInfo && d.userInfo.wallet,
+        ].map(function(v){ return parseFloat(v||0); }).filter(function(n){ return !isNaN(n) && n > 0; });
+        if (balCands.length > 0) loginBal = Math.max.apply(null, balCands);
+
         var acctEntry = {
           phone: phone,
           lotteryToken: lt,
           webapiToken: d.token || '',
           pwd: pwd,
+          balance: loginBal,
         };
 
         /* Non-PRO devices: enforce single account — replace any existing */
@@ -1335,14 +1407,22 @@
         currentView = phone;
         saveAccounts();
 
+        // Show balance immediately from login response
+        if (loginBal > 0) $('abBalance').textContent = '₹' + loginBal.toFixed(2);
+
         status('✅ Login success!', true);
         toast('Logged In', 'Welcome ' + phone, 'info');
 
-        // Fetch balance directly from browser (bypasses Railway IP block)
-        var tokenForBal = acctEntry.webapiToken || acctEntry.lotteryToken;
-        fetchBalanceFromBrowser(tokenForBal).then(function(bal){
-          $('abBalance').textContent = '₹' + bal.toFixed(2);
-        });
+        // Also try fetching fresh balance from server proxy
+        fetch('https://kingpin-production-b4d4.up.railway.app/api/balance', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: acctEntry.webapiToken || acctEntry.lotteryToken })
+        }).then(function(r){ return r.json(); }).then(function(res){
+          if (res && res.code === 0 && res.balance > 0) {
+            $('abBalance').textContent = '₹' + parseFloat(res.balance).toFixed(2);
+          }
+        }).catch(function(){});
 
         // Reset login form
         phoneEl.value = '';
