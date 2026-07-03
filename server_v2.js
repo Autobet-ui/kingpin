@@ -71,36 +71,44 @@ async function loginGoa(payload) { return goaPost('/Login', payload); }
 // ══════════════════════════════════════
 async function getBalance(token) {
   if(!token) return 0;
-  const endpoints = [
+
+  function deepScan(obj, depth) {
+    if(!obj || typeof obj !== 'object' || depth > 4) return [];
+    var KEYS = ['money','balance','wallet','mainBalance','normalBalance',
+      'rechargeBalance','totalBalance','coinBalance','amount','availableBalance',
+      'cashBalance','gameBalance','withdrawBalance','userMoney','userBalance'];
+    var vals = [];
+    for(var k of Object.keys(obj)) {
+      if(KEYS.includes(k)) {
+        var v = parseFloat(obj[k]);
+        if(!isNaN(v) && v >= 0) vals.push(v);
+      } else if(typeof obj[k] === 'object') {
+        vals = vals.concat(deepScan(obj[k], depth + 1));
+      }
+    }
+    return vals;
+  }
+
+  var endpoints = [
     '/Member/GetUserInfo',
     '/User/GetUserInfo',
-    '/User/GetInfo',
     '/Member/UserInfo',
+    '/User/GetInfo',
     '/Member/MemberInfo',
   ];
+
   for(var ep of endpoints) {
     try {
       var r = await goaPost(ep, {}, token);
-      if(r && r.code===0 && r.data) {
-        var d = r.data;
-        // Extract all possible balance fields
-        // Flatten all nested objects to find any balance field
-        function extractBal(obj, depth) {
-          if(!obj||depth>3) return [];
-          var vals=[];
-          var balKeys=['money','balance','wallet','mainBalance','normalBalance',
-            'rechargeBalance','totalBalance','coinBalance','amount','availableBalance',
-            'cashBalance','gameBalance','withdrawBalance'];
-          for(var k of Object.keys(obj||{})) {
-            if(balKeys.includes(k)) { var v=parseFloat(obj[k]); if(!isNaN(v)&&v>=0) vals.push(v); }
-            else if(typeof obj[k]==='object') vals=vals.concat(extractBal(obj[k],depth+1));
-          }
-          return vals;
+      if(r && (r.code===0 || r.code==='0') && r.data) {
+        var vals = deepScan(r.data, 0);
+        if(vals.length > 0) {
+          var bal = Math.max(...vals);
+          console.log('[BAL]', ep, '->', bal);
+          return bal;
         }
-        var cands = extractBal(d, 0);
-        if(cands.length>0) return Math.max(...cands);
       }
-    } catch(e) { /* try next */ }
+    } catch(e) { console.log('[BAL ERR]', ep, e.message); }
   }
   return 0;
 }
@@ -132,27 +140,59 @@ async function fetchPublicList(size, modeUrl) {
 // ══════════════════════════════════════
 //  CURRENT ISSUE — Fixed
 // ══════════════════════════════════════
-async function getCurrentIssue(token, modeUrl) {
-  // Primary: public source (most reliable, no auth needed)
-  var list = await fetchPublicList(1, modeUrl);
-  if(list.length>0) {
-    var last = String(list[0].issueNumber||list[0].issue||'');
-    if(last&&/^\d+$/.test(last)) {
-      var next = String(BigInt(last)+1n);
-      // Calculate real countdown from period number
-      var periodLen = 30; // default 30s
-      var epochSec = Math.floor(Date.now()/1000);
-      var rem = periodLen - (epochSec % periodLen);
-      return { issueNumber:next, remainTime:rem };
+// ── Per-account timer state ──
+var _issueTimers = {};  // phone -> {issueNo, startMs, periodLen}
+
+async function getCurrentIssue(token, modeUrl, phone) {
+  try {
+    // Fetch latest completed period from public API
+    var list = await fetchPublicList(2, modeUrl);
+    if(list && list.length > 0) {
+      var last     = String(list[0].issueNumber || list[0].issue || '');
+      var prevLast = list[1] ? String(list[1].issueNumber || list[1].issue || '') : '';
+
+      if(last && /^\d+$/.test(last)) {
+        var next = String(BigInt(last) + 1n);
+
+        // Detect period length from API data
+        var periodLen = 30;
+        if(list[0].startTime && list[1] && list[1].startTime) {
+          var t1 = new Date(list[0].startTime).getTime();
+          var t2 = new Date(list[1].startTime).getTime();
+          var diff = Math.abs(t1 - t2) / 1000;
+          if(diff >= 25 && diff <= 310) periodLen = Math.round(diff);
+        }
+
+        // Use server-side timer per account to track countdown
+        var timer = _issueTimers[phone || 'default'];
+        var nowMs  = Date.now();
+
+        if(!timer || timer.issueNo !== next) {
+          // New period started — reset timer
+          _issueTimers[phone || 'default'] = {
+            issueNo: next,
+            startMs: nowMs,
+            periodLen: periodLen
+          };
+          timer = _issueTimers[phone || 'default'];
+        }
+
+        var elapsed = Math.floor((nowMs - timer.startMs) / 1000);
+        var rem     = Math.max(0, timer.periodLen - elapsed);
+
+        return { issueNumber: next, remainTime: rem, periodLen: timer.periodLen };
+      }
     }
-  }
+  } catch(e) { console.log('[issue]', e.message); }
+
   // GOA fallback
   try {
-    var r = await goaPost('/WinGo/GetCurrentIssue',{typeId:TYPE_ID},token);
-    if(r&&r.code===0&&r.data) {
+    var r = await goaPost('/WinGo/GetCurrentIssue', {typeId: TYPE_ID}, token);
+    if(r && r.code===0 && r.data) {
       return {
-        issueNumber: String(r.data.issueNumber||r.data.issue||''),
-        remainTime: Number(r.data.countdown||r.data.remainTime||r.data.endTime||30),
+        issueNumber: String(r.data.issueNumber || r.data.issue || ''),
+        remainTime:  Number(r.data.countdown || r.data.remainTime || r.data.endTime || 30),
+        periodLen:   30,
       };
     }
   } catch(e) {}
@@ -721,13 +761,14 @@ async function startEngine(phone) {
     if(!accounts[phone]||st.engine!=='running') return;
     try {
       var token=st.webapiToken||st.lotteryToken;
-      var issue=await getCurrentIssue(token, st.modeUrl);
+      var issue=await getCurrentIssue(token, st.modeUrl, phone);
       if(!issue||!issue.issueNumber) return;
 
       var issueNo  = String(issue.issueNumber||'');
       var countdown= parseInt(issue.remainTime||30);
 
-      io.to('acct:'+phone).emit('countdown',{secs:countdown,total:30,issueNumber:issueNo});
+      var periodLen = issue.periodLen || 30;
+      io.to('acct:'+phone).emit('countdown',{secs:countdown,total:periodLen,issueNumber:issueNo});
 
       // ✅ New period detected → check last result
       if(lastIssue && issueNo!==lastIssue) {
@@ -835,6 +876,27 @@ async function startEngine(phone) {
       }
     } catch(err) { log(phone,'⚠️ Tick: '+err.message,'warn'); }
   }
+
+  // Refresh balance every 4 ticks (~12s)
+  var _balTickCount = 0;
+  var _origTick = tick;
+  tick = async function() {
+    await _origTick();
+    _balTickCount++;
+    if(_balTickCount % 4 === 0) {
+      try {
+        var st2 = accounts[phone];
+        if(st2 && st2.engine === 'running') {
+          var newBal = await getBalance(st2.webapiToken || st2.lotteryToken);
+          if(newBal > 0) {
+            st2.balance = newBal;
+            io.to('acct:'+phone).emit('balanceUpdate', {phone, balance: newBal});
+            broadcastAccountList();
+          }
+        }
+      } catch(e) {}
+    }
+  };
 
   st._interval=setInterval(tick,3000);
   tick();
