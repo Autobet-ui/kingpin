@@ -10,81 +10,14 @@
 </head>
 <body>
 
-<!-- ═══ KEY GATE ═══ -->
-<div id="rootGate">
-  <div class="kp-gate-inner">
-    <div class="kp-gate-logo">KINGPIN</div>
-    <div class="kp-gate-sub">LICENSE KEY REQUIRED</div>
-
-    <div class="kp-input-label">LICENSE KEY</div>
-    <div class="kp-input-row">
-      <span class="kp-prompt">❯</span>
-      <input type="text" id="rootKey" placeholder="XXXXX-XXXXX-XXXXX-XXXXX-XXXXX"
-             maxlength="29" autocomplete="off" autocapitalize="characters"
-             style="letter-spacing:2px;font-family:'JetBrains Mono',monospace;font-size:13px" />
-    </div>
-
-    <div class="kp-gate-err" id="rootErr"></div>
-    <button class="kp-btn-main" id="rootBtn" style="margin-top:14px">UNLOCK</button>
-  </div>
-</div>
+<!-- Gate removed — no license required -->
 <script>
 (function(){
-  var G  = document.getElementById('rootGate');
-  var KI = document.getElementById('rootKey');
-  var E  = document.getElementById('rootErr');
-  var B  = document.getElementById('rootBtn');
-
-  /* Already unlocked this session? Only skip gate if BOTH valid flag AND key are present */
-  if(sessionStorage.getItem('kp_key_valid')==='1' && sessionStorage.getItem('kp_key')){
-    G.style.display='none'; return;
-  }
-  /* Clear any stale/old session data so gate shows fresh */
-  sessionStorage.removeItem('kp_key_valid');
-  sessionStorage.removeItem('kp_key');
-  sessionStorage.removeItem('kp_is_default');
-  sessionStorage.removeItem('kp_bound_phone');
-  sessionStorage.removeItem('kp_session_id');
-
-  /* Auto-format key as user types: XXXXX-XXXXX-XXXXX-XXXXX-XXXXX */
-  KI.addEventListener('input', function(){
-    var raw = KI.value.replace(/[^A-Za-z0-9]/g,'').toUpperCase().slice(0,25);
-    var fmt = raw.match(/.{1,5}/g);
-    KI.value = fmt ? fmt.join('-') : raw;
-  });
-
-  function unlock(){
-    var key = KI.value.trim();
-    if(!key){ E.textContent='Enter your license key'; return; }
-
-    B.disabled=true; B.textContent='Checking...'; E.textContent='';
-    fetch('/api/keys/check',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ key: key })
-    })
-    .then(function(r){ return r.json(); })
-    .then(function(d){
-      if(d.ok){
-        sessionStorage.setItem('kp_key_valid','1');
-        sessionStorage.setItem('kp_key', key);
-        sessionStorage.setItem('kp_is_default', d.isDefault ? '1' : '0');
-        sessionStorage.setItem('kp_bound_phone', d.boundPhone || '');
-        G.style.display='none';
-        /* Re-apply permissions now that sessionStorage is populated */
-        if(typeof applyKeyPermissions === 'function') applyKeyPermissions();
-      } else {
-        E.textContent = d.msg || 'Invalid or disabled key';
-        KI.style.borderColor='var(--red)';
-        setTimeout(function(){ KI.style.borderColor=''; E.textContent=''; }, 2000);
-      }
-    })
-    .catch(function(){ E.textContent='Server error'; })
-    .finally(function(){ B.disabled=false; B.textContent='UNLOCK'; });
-  }
-
-  B.addEventListener('click', unlock);
-  KI.addEventListener('keydown', function(e){ if(e.key==='Enter') unlock(); });
+  // Auto-bypass gate — set session as valid
+  sessionStorage.setItem('kp_key_valid','1');
+  sessionStorage.setItem('kp_key','DEFAULT');
+  sessionStorage.setItem('kp_is_default','1');
+  sessionStorage.setItem('kp_bound_phone','');
 })();
 </script>
 
@@ -607,9 +540,17 @@
 
     /* ── Countdown ── */
     socket.on('countdown', function(d) {
-      $('abCD').textContent = d.secs + 's';
-      var pct = ((d.total - d.secs) / d.total * 100).toFixed(1);
+      var secs = parseInt(d.secs) || 0;
+      var total = parseInt(d.total) || 30;
+      var m = Math.floor(secs/60), s = secs%60;
+      $('abCD').textContent = m > 0 ? m+':'+String(s).padStart(2,'0') : secs+'s';
+      var pct = total > 0 ? ((total-secs)/total*100).toFixed(1) : 0;
       $('abHeroBar').style.width = pct + '%';
+      if (d.issueNumber) {
+        var p = $('abPeriod');
+        var t = '...'+String(d.issueNumber).slice(-5);
+        if (p && p.textContent !== t) p.textContent = t;
+      }
     });
 
     /* ── Activity log ── */
@@ -669,12 +610,59 @@
       }
     });
 
+    socket.on('balanceUpdate', function(d) {
+      if (!d) return;
+      var bal = parseFloat(d.balance) || 0;
+      if (bal > 0 && (!currentView || d.phone === currentView)) {
+        $('abBalance').textContent = '₹' + bal.toFixed(2);
+      }
+    });
+
     socket.on('disconnect', function() {
       console.log('[KP] Socket disconnected');
     });
   }
 
   /* ── Re-auth all saved accounts on connect ── */
+  // Client-side balance fetch using browser (no Railway block)
+  async function fetchBalanceBrowser(acct) {
+    try {
+      var token = acct.webapiToken || acct.lotteryToken;
+      if (!token) return 0;
+      var r = await fetch('https://api.goa7777.com/api/webapi/Member/GetUserInfo', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token,
+          'token': token,
+          'Origin': 'https://goagamea.com',
+          'Referer': 'https://goagamea.com/',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({ language:0, random: Math.random().toString(36).slice(2), timestamp: Math.floor(Date.now()/1000), signature:'' })
+      });
+      var d = await r.json();
+      if (d && d.data) {
+        var b = parseFloat(d.data.money || d.data.balance || d.data.wallet || 0);
+        if (b > 0) return b;
+      }
+    } catch(e) {}
+    return 0;
+  }
+
+  async function refreshBalanceNow() {
+    var acct = accounts.find(function(x){ return x.phone === currentView; });
+    if (!acct) return;
+    var bal = await fetchBalanceBrowser(acct);
+    if (bal > 0) {
+      $('abBalance').textContent = '₹' + bal.toFixed(2);
+      acct.balance = bal;
+    }
+  }
+
+  // Auto refresh balance every 15s
+  setInterval(function(){ if (currentView) refreshBalanceNow(); }, 15000);
+
   function reAuthAll() {
     if (!socket) return;
     accounts.forEach(function(a) {
@@ -684,6 +672,9 @@
         phone: a.phone,
         pwd: a.pwd || '',
       });
+      setTimeout(function(ph){ return function(){
+        if (socket && socket.connected) socket.emit('refreshBalance', { phone: ph });
+      };}(a.phone), 2500);
     });
     // Switch to current view
     if (currentView) {
@@ -691,6 +682,8 @@
         socket.emit('switchView', { phone: currentView });
       }, 500);
     }
+    // Fetch balance from browser side after 3s
+    setTimeout(refreshBalanceNow, 3000);
   }
 
   /* ═══ Account Tabs ═══ */
@@ -734,8 +727,9 @@
   function renderState(s) {
     if (!s) return;
 
-    // Balance
-    $('abBalance').textContent = '₹' + (s.balance || 0).toFixed(2);
+    // Balance — only update if real value > 0
+    var _bal = parseFloat(s.balance) || 0;
+    if (_bal > 0) $('abBalance').textContent = '₹' + _bal.toFixed(2);
 
     // Engine pill
     var pill = $('abEngine');
@@ -800,7 +794,7 @@
       var pred = s.prediction.pred || 'WAIT';
       predEl.textContent = pred;
       predEl.className = 'ab-hero-pred pred-' + pred.toLowerCase();
-      $('abPeriod').textContent = s.prediction.forIssue ? '...' + s.prediction.forIssue.slice(-5) : '—';
+      if (s.prediction.forIssue) $('abPeriod').textContent = '...'+String(s.prediction.forIssue).slice(-5);
       var subsEl = $('abHeroSubs');
       subsEl.innerHTML = '';
       var rawLog = s.prediction.log || '';
@@ -1259,12 +1253,24 @@
         }
         if (!lt && d.token) lt = d.token;
 
+        // Extract balance directly from login response
+        var _loginBal = parseFloat(
+          d.money || d.balance || d.wallet || d.mainBalance ||
+          (d.userInfo && (d.userInfo.money || d.userInfo.balance)) || 0
+        ) || 0;
+
         var acctEntry = {
           phone: phone,
           lotteryToken: lt,
           webapiToken: d.token || '',
           pwd: pwd,
+          balance: _loginBal,
         };
+
+        // Show balance immediately
+        if (_loginBal > 0) {
+          $('abBalance').textContent = '₹' + _loginBal.toFixed(2);
+        }
 
         /* Regular key users: enforce single account — replace any existing */
         if (!kpIsDefault) accounts = [];
@@ -1492,39 +1498,9 @@
   // ─────────────────────────────────────────────────────
   var _expRecords = [];
 
-  /* ═══ CLIENT-SIDE EXPORT — browser fetches directly, no server needed ═══ */
-  var _exportRunning = false;
-
-  // Public WinGo API URLs
-  var PUB_WINGO_URLS = {
-    'WinGo_30S': 'https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json',
-    'WinGo_1M' : 'https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json',
-    'WinGo_3M' : 'https://draw.ar-lottery01.com/WinGo/WinGo_3M/GetHistoryIssuePage.json',
-    'WinGo_5M' : 'https://draw.ar-lottery01.com/WinGo/WinGo_5M/GetHistoryIssuePage.json',
-  };
-
-  async function _fetchOnePage(baseUrl, pageNo, pageSize) {
-    var url = baseUrl + '?pageNo=' + pageNo + '&pageSize=' + pageSize + '&gameId=1&t=' + Date.now();
-    var r = await fetch(url, {
-      headers: { 'Accept': 'application/json' },
-      cache: 'no-store'
-    });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    var d = await r.json();
-    var data = d.data || d;
-    return (data.list || data.issueList || data.data || []);
-  }
-
-  window.startHistoryExport = async function() {
-    if (_exportRunning) return;
-    _exportRunning = true;
-
+  window.startHistoryExport = function() {
+    if (!socket) { expLog('err', 'Not connected to server.'); return; }
     var totalWant = parseInt($('expRecords').value) || 500;
-    var gameMode  = ($('expGame').value || 'WinGo_30S').trim();
-    var baseUrl   = PUB_WINGO_URLS[gameMode] || PUB_WINGO_URLS['WinGo_30S'];
-    var pageSize  = 100;
-    var maxPages  = Math.ceil(totalWant / pageSize);
-
     _expRecords = [];
     $('expBtnFetch').disabled = true;
     $('expBtnDownload').style.display = 'none';
@@ -1532,67 +1508,51 @@
     $('expStats').style.display = 'none';
     $('expLog').style.display = 'block';
     $('expLog').innerHTML = '';
-    $('expBar').style.width = '5%';
-    $('expProgressText').textContent = 'Starting client-side fetch…';
-    expLog('info', 'Fetching ' + totalWant + ' records directly from API (' + gameMode + ')…');
-
-    for (var page = 1; page <= maxPages; page++) {
-      var pct = Math.round((page / maxPages) * 90);
-      $('expBar').style.width = pct + '%';
-      $('expProgressText').textContent = 'Page ' + page + ' / ' + maxPages + '  —  ' + _expRecords.length + ' records';
-
-      var attempts = 0, list = [];
-      while (attempts < 3 && list.length === 0) {
-        try {
-          list = await _fetchOnePage(baseUrl, page, pageSize);
-          if (list.length > 0) {
-            expLog('ok', 'Page ' + page + '/' + maxPages + ' → ' + list.length + ' records (total: ' + (_expRecords.length + list.length) + ')');
-          } else {
-            expLog('warn', 'Page ' + page + ': empty — no more data.');
-            maxPages = 0; // stop
-          }
-        } catch(e) {
-          attempts++;
-          expLog('warn', 'Page ' + page + ' attempt ' + attempts + ' failed: ' + e.message);
-          if (attempts < 3) await new Promise(function(r){ setTimeout(r, 800); });
-        }
-      }
-
-      list.forEach(function(item) {
-        var n = parseInt(item.number || item.num || 0);
-        _expRecords.push({
-          issueNumber: String(item.issueNumber || item.issue || ''),
-          number: n,
-          bs: n >= 5 ? 'BIG' : 'SMALL',
-          colour: n === 0 || n === 5 ? 'Violet' : (n % 2 === 0 ? 'Red' : 'Green'),
-          openTime: item.startTime || item.openTime || item.time || ''
-        });
-      });
-
-      if (_expRecords.length >= totalWant) break;
-      await new Promise(function(r){ setTimeout(r, 200); });
-    }
-
-    _exportRunning = false;
-    $('expBtnFetch').disabled = false;
-    $('expBar').style.width = '100%';
-
-    if (_expRecords.length === 0) {
-      $('expProgressText').textContent = 'Failed — 0 records.';
-      expLog('err', 'No records fetched. Check game mode or try again.');
-      return;
-    }
-
-    $('expProgressText').textContent = '✓ Done — ' + _expRecords.length + ' records fetched.';
-    expLog('ok', 'Export complete: ' + _expRecords.length + ' records from ' + gameMode);
-    $('expBtnDownload').style.display = '';
-    expShowStats();
+    $('expBar').style.width = '10%';
+    $('expProgressText').textContent = 'Requesting ' + totalWant + ' records from server…';
+    expLog('info', 'Fetching ' + totalWant + ' records via server (signed + paginated)…');
+    socket.emit('exportHistory', { phone: currentView, totalRecords: totalWant });
   };
 
   function _bindExpHistorySocket() {
-    // Socket export handlers kept for compatibility (not used now)
-    socket && socket.on('exportHistoryProgress', function(){});
-    socket && socket.on('exportHistoryResult', function(){});
+    socket.on('exportHistoryProgress', function(d) {
+      var pct = Math.round((d.page / d.maxPages) * 100);
+      $('expBar').style.width = pct + '%';
+      $('expProgressText').textContent = 'Page ' + d.page + ' / ' + d.maxPages + '  —  ' + d.total + ' records';
+      if (d.retrying) {
+        expLog('warn', '⚠ Page ' + d.page + ' retry ' + d.retrying + '/3 — waiting…');
+      } else if (d.error) {
+        expLog('err', 'Page ' + d.page + ' failed: ' + d.error);
+      } else if (d.done) {
+        expLog('info', 'Page ' + d.page + ': empty — no more records.');
+      } else {
+        expLog('ok', 'Page ' + d.page + '/' + d.maxPages + ' → total ' + d.total);
+      }
+    });
+    socket.on('exportHistoryResult', function(data) {
+      $('expBtnFetch').disabled = false;
+      if (!data.ok || !data.list || !data.list.length) {
+        $('expBar').style.width = '100%';
+        $('expProgressText').textContent = 'Failed.';
+        expLog('err', 'Export failed: ' + (data.msg || 'no records returned'));
+        return;
+      }
+      data.list.forEach(function(item) {
+        var n = parseInt(item.number);
+        _expRecords.push({
+          issueNumber: item.issueNumber || '',
+          number:      item.number !== undefined ? item.number : '',
+          bs:          n >= 5 ? 'B' : 'S',
+          colour:      item.colour || item.color || '',
+          openTime:    item.openTime || ''
+        });
+      });
+      $('expBar').style.width = '100%';
+      $('expProgressText').textContent = '✓ Done — ' + _expRecords.length + ' records fetched.';
+      expLog('ok', 'Complete: ' + _expRecords.length + ' records received from server.');
+      $('expBtnDownload').style.display = '';
+      expShowStats();
+    });
   }
 
   window.downloadHistoryCSV = function() {
