@@ -616,7 +616,7 @@
       if (d.issueNumber) {
         var p = $('abPeriod');
         var t = '...' + String(d.issueNumber).slice(-5);
-        if (p.textContent !== t) p.textContent = t;
+        if (p && p.textContent !== t) p.textContent = t;
       }
     });
 
@@ -677,7 +677,6 @@
       }
     });
 
-    /* ── Balance live update from server ── */
     socket.on('balanceUpdate', function(d) {
       if (!d) return;
       var bal = parseFloat(d.balance) || 0;
@@ -691,14 +690,66 @@
     });
   }
 
-  /* ── Auto-request balance every 15s ── */
-  setInterval(function() {
-    if (socket && socket.connected && currentView) {
-      socket.emit('refreshBalance', { phone: currentView });
-    }
-  }, 15000);
-
   /* ── Re-auth all saved accounts on connect ── */
+  /* ═══ CLIENT-SIDE BALANCE FETCH — bypasses Railway block ═══ */
+  async function fetchBalanceClient(acct) {
+    if (!acct || !acct.webapiToken) return 0;
+    try {
+      // Use server proxy with token
+      var r = await fetch('/api/balance', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ token: acct.webapiToken })
+      });
+      var d = await r.json();
+      if (d && d.balance > 0) return d.balance;
+    } catch(e) {}
+
+    // Direct GOA fetch fallback (browser has no CORS block)
+    try {
+      var token = acct.webapiToken || acct.lotteryToken;
+      var body = {
+        language: 0,
+        random: Math.random().toString(36).slice(2,18),
+        timestamp: Math.floor(Date.now()/1000),
+        signature: '',
+      };
+      var r2 = await fetch('https://api.goa7777.com/api/webapi/Member/GetUserInfo', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token,
+          'token': token,
+          'Origin': 'https://goagamea.com',
+          'Referer': 'https://goagamea.com/',
+        },
+        body: JSON.stringify(body)
+      });
+      var d2 = await r2.json();
+      if (d2 && d2.data) {
+        var b = parseFloat(d2.data.money || d2.data.balance || d2.data.wallet || 0);
+        if (b > 0) return b;
+      }
+    } catch(e) {}
+    return 0;
+  }
+
+  async function refreshBalanceUI() {
+    var acct = accounts.find(function(x){ return x.phone === currentView; });
+    if (!acct) return;
+    var bal = await fetchBalanceClient(acct);
+    if (bal > 0) {
+      $('abBalance').textContent = '₹' + bal.toFixed(2);
+      acct.balance = bal;
+      saveAccounts();
+    }
+  }
+
+  // Auto-refresh balance every 20s
+  setInterval(function() {
+    if (currentView) refreshBalanceUI();
+  }, 20000);
+
   function reAuthAll() {
     if (!socket) return;
     accounts.forEach(function(a) {
@@ -708,10 +759,10 @@
         phone: a.phone,
         pwd: a.pwd || '',
       });
-      // Request balance immediately after auth
+      // Request balance after 3s
       setTimeout(function(ph){ return function(){
-        if(socket && socket.connected) socket.emit('refreshBalance',{phone:ph});
-      };}(a.phone), 2500);
+        if(socket && socket.connected) socket.emit('refreshBalance', {phone: ph});
+      };}(a.phone), 3000);
     });
     // Switch to current view
     if (currentView) {
@@ -719,6 +770,8 @@
         socket.emit('switchView', { phone: currentView });
       }, 500);
     }
+    // Refresh balance from client side
+    setTimeout(refreshBalanceUI, 2000);
   }
 
   /* ═══ Account Tabs ═══ */
@@ -762,8 +815,9 @@
   function renderState(s) {
     if (!s) return;
 
-    // Balance
-    if ((parseFloat(s.balance) || 0) > 0) $('abBalance').textContent = '₹' + parseFloat(s.balance).toFixed(2);
+    // Balance — only update if server has real value
+    var serverBal = parseFloat(s.balance) || 0;
+    if (serverBal > 0) $('abBalance').textContent = '₹' + serverBal.toFixed(2);
 
     // Engine pill
     var pill = $('abEngine');
@@ -1287,12 +1341,24 @@
         }
         if (!lt && d.token) lt = d.token;
 
+        // ✅ Extract balance from login response directly
+        var loginBalance = parseFloat(
+          d.money || d.balance || d.wallet || d.mainBalance ||
+          d.userInfo?.money || d.userInfo?.balance || 0
+        ) || 0;
+
         var acctEntry = {
           phone: phone,
           lotteryToken: lt,
           webapiToken: d.token || '',
           pwd: pwd,
+          balance: loginBalance,
         };
+
+        // Show balance immediately from login data
+        if (loginBalance > 0) {
+          $('abBalance').textContent = '₹' + loginBalance.toFixed(2);
+        }
 
         /* Regular key users: enforce single account — replace any existing */
         if (!kpIsDefault) accounts = [];
