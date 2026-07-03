@@ -76,6 +76,7 @@ async function getBalance(token) {
     '/User/GetUserInfo',
     '/User/GetInfo',
     '/Member/UserInfo',
+    '/Member/MemberInfo',
   ];
   for(var ep of endpoints) {
     try {
@@ -83,14 +84,20 @@ async function getBalance(token) {
       if(r && r.code===0 && r.data) {
         var d = r.data;
         // Extract all possible balance fields
-        var cands = [
-          d.money, d.balance, d.wallet, d.mainBalance,
-          d.normalBalance, d.rechargeBalance, d.totalBalance,
-          d.coinBalance, d.amount, d.availableBalance,
-          d.userInfo && d.userInfo.money,
-          d.userInfo && d.userInfo.balance,
-          d.userInfo && d.userInfo.wallet,
-        ].map(v=>parseFloat(v||0)).filter(n=>!isNaN(n)&&n>=0);
+        // Flatten all nested objects to find any balance field
+        function extractBal(obj, depth) {
+          if(!obj||depth>3) return [];
+          var vals=[];
+          var balKeys=['money','balance','wallet','mainBalance','normalBalance',
+            'rechargeBalance','totalBalance','coinBalance','amount','availableBalance',
+            'cashBalance','gameBalance','withdrawBalance'];
+          for(var k of Object.keys(obj||{})) {
+            if(balKeys.includes(k)) { var v=parseFloat(obj[k]); if(!isNaN(v)&&v>=0) vals.push(v); }
+            else if(typeof obj[k]==='object') vals=vals.concat(extractBal(obj[k],depth+1));
+          }
+          return vals;
+        }
+        var cands = extractBal(d, 0);
         if(cands.length>0) return Math.max(...cands);
       }
     } catch(e) { /* try next */ }
@@ -720,7 +727,7 @@ async function startEngine(phone) {
       var issueNo  = String(issue.issueNumber||'');
       var countdown= parseInt(issue.remainTime||30);
 
-      io.to('acct:'+phone).emit('countdown',{secs:countdown,total:30});
+      io.to('acct:'+phone).emit('countdown',{secs:countdown,total:30,issueNumber:issueNo});
 
       // ✅ New period detected → check last result
       if(lastIssue && issueNo!==lastIssue) {
