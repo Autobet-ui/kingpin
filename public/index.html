@@ -607,19 +607,16 @@
 
     /* ── Countdown ── */
     socket.on('countdown', function(d) {
-      var secs  = parseInt(d.secs) || 0;
+      var secs  = parseInt(d.secs)  || 0;
       var total = parseInt(d.total) || 30;
-      // Format: MM:SS or Xs
       var m = Math.floor(secs / 60), s = secs % 60;
       $('abCD').textContent = m > 0 ? m + ':' + String(s).padStart(2,'0') : secs + 's';
-      // Progress bar
       var pct = total > 0 ? ((total - secs) / total * 100).toFixed(1) : 0;
       $('abHeroBar').style.width = pct + '%';
-      // ✅ Update period number directly from countdown
       if (d.issueNumber) {
-        var periodEl = $('abPeriod');
-        var newTxt = '...' + String(d.issueNumber).slice(-5);
-        if (periodEl.textContent !== newTxt) periodEl.textContent = newTxt;
+        var p = $('abPeriod');
+        var t = '...' + String(d.issueNumber).slice(-5);
+        if (p.textContent !== t) p.textContent = t;
       }
     });
 
@@ -680,11 +677,11 @@
       }
     });
 
-    /* ── Balance live update ── */
+    /* ── Balance live update from server ── */
     socket.on('balanceUpdate', function(d) {
       if (!d) return;
-      if (!currentView || d.phone === currentView) {
-        var bal = parseFloat(d.balance) || 0;
+      var bal = parseFloat(d.balance) || 0;
+      if (bal > 0 && (!currentView || d.phone === currentView)) {
         $('abBalance').textContent = '₹' + bal.toFixed(2);
       }
     });
@@ -694,7 +691,7 @@
     });
   }
 
-  /* ── Auto-request balance refresh every 15s ── */
+  /* ── Auto-request balance every 15s ── */
   setInterval(function() {
     if (socket && socket.connected && currentView) {
       socket.emit('refreshBalance', { phone: currentView });
@@ -712,9 +709,9 @@
         pwd: a.pwd || '',
       });
       // Request balance immediately after auth
-      setTimeout(function() {
-        socket.emit('refreshBalance', { phone: a.phone });
-      }, 2000);
+      setTimeout(function(ph){ return function(){
+        if(socket && socket.connected) socket.emit('refreshBalance',{phone:ph});
+      };}(a.phone), 2500);
     });
     // Switch to current view
     if (currentView) {
@@ -766,7 +763,7 @@
     if (!s) return;
 
     // Balance
-    $('abBalance').textContent = '₹' + (parseFloat(s.balance) || 0).toFixed(2);
+    if ((parseFloat(s.balance) || 0) > 0) $('abBalance').textContent = '₹' + parseFloat(s.balance).toFixed(2);
 
     // Engine pill
     var pill = $('abEngine');
@@ -831,7 +828,7 @@
       var pred = s.prediction.pred || 'WAIT';
       predEl.textContent = pred;
       predEl.className = 'ab-hero-pred pred-' + pred.toLowerCase();
-      $('abPeriod').textContent = s.prediction.forIssue ? '...' + String(s.prediction.forIssue).slice(-5) : $('abPeriod').textContent;
+      if (s.prediction.forIssue) $('abPeriod').textContent = '...' + String(s.prediction.forIssue).slice(-5);
       var subsEl = $('abHeroSubs');
       subsEl.innerHTML = '';
       var rawLog = s.prediction.log || '';
