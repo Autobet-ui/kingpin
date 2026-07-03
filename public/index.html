@@ -639,9 +639,15 @@
 
     /* ── Countdown ── */
     socket.on('countdown', function(d) {
-      $('abCD').textContent = d.secs + 's';
-      var pct = ((d.total - d.secs) / d.total * 100).toFixed(1);
+      var secs = d.secs || 0;
+      var total = d.total || 30;
+      var m = Math.floor(secs/60), s = secs%60;
+      $('abCD').textContent = m > 0 ? m+':'+String(s).padStart(2,'0') : secs+'s';
+      var pct = ((total - secs) / total * 100).toFixed(1);
       $('abHeroBar').style.width = pct + '%';
+      if (d.issueNumber) {
+        $('abPeriod').textContent = '...' + String(d.issueNumber).slice(-5);
+      }
     });
 
     /* ── Activity log ── */
@@ -701,10 +707,24 @@
       }
     });
 
+    /* ── Balance refresh ── */
+    socket.on('balanceUpdate', function(d) {
+      if (d.phone === currentView) {
+        $('abBalance').textContent = '₹' + (d.balance || 0).toFixed(2);
+      }
+    });
+
     socket.on('disconnect', function() {
       console.log('[KP] Socket disconnected');
     });
   }
+
+  /* ── Auto refresh balance every 20s when running ── */
+  setInterval(function() {
+    if (socket && socket.connected && currentView) {
+      socket.emit('refreshBalance', { phone: currentView });
+    }
+  }, 20000);
 
   /* ═══ BALANCE — server proxy (Railway fetches for us) ═══ */
   var RAILWAY = 'https://kingpin-production-b4d4.up.railway.app';
@@ -1109,7 +1129,7 @@
     if (!s) return;
 
     // Balance
-    $('abBalance').textContent = '₹' + (s.balance || 0).toFixed(2);
+    $('abBalance').textContent = '₹' + parseFloat(s.balance || 0).toFixed(2);
 
     // Engine pill
     var pill = $('abEngine');
@@ -1148,7 +1168,7 @@
       var pred = s.prediction.pred || 'WAIT';
       predEl.textContent = pred;
       predEl.className = 'ab-hero-pred pred-' + pred.toLowerCase();
-      $('abPeriod').textContent = s.prediction.forIssue ? '...' + s.prediction.forIssue.slice(-5) : '—';
+      $('abPeriod').textContent = s.prediction.forIssue ? '...' + String(s.prediction.forIssue).slice(-5) : '—';
 
       // Confidence bar
       var conf = s.prediction.conf || 0;
