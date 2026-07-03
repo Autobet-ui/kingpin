@@ -10,15 +10,12 @@
 </head>
 <body>
 
-<!-- Gate removed — no license required -->
+<!-- Gate removed -->
 <script>
-(function(){
-  // Auto-bypass gate — set session as valid
-  sessionStorage.setItem('kp_key_valid','1');
-  sessionStorage.setItem('kp_key','DEFAULT');
-  sessionStorage.setItem('kp_is_default','1');
-  sessionStorage.setItem('kp_bound_phone','');
-})();
+sessionStorage.setItem('kp_key_valid','1');
+sessionStorage.setItem('kp_key','DEFAULT');
+sessionStorage.setItem('kp_is_default','1');
+sessionStorage.setItem('kp_bound_phone','');
 </script>
 
 <!-- ═══ TOAST ═══ -->
@@ -540,17 +537,9 @@
 
     /* ── Countdown ── */
     socket.on('countdown', function(d) {
-      var secs = parseInt(d.secs) || 0;
-      var total = parseInt(d.total) || 30;
-      var m = Math.floor(secs/60), s = secs%60;
-      $('abCD').textContent = m > 0 ? m+':'+String(s).padStart(2,'0') : secs+'s';
-      var pct = total > 0 ? ((total-secs)/total*100).toFixed(1) : 0;
+      $('abCD').textContent = d.secs + 's';
+      var pct = ((d.total - d.secs) / d.total * 100).toFixed(1);
       $('abHeroBar').style.width = pct + '%';
-      if (d.issueNumber) {
-        var p = $('abPeriod');
-        var t = '...'+String(d.issueNumber).slice(-5);
-        if (p && p.textContent !== t) p.textContent = t;
-      }
     });
 
     /* ── Activity log ── */
@@ -611,24 +600,21 @@
     });
 
     socket.on('balanceUpdate', function(d) {
-      if (!d) return;
-      var bal = parseFloat(d.balance) || 0;
-      if (bal > 0 && (!currentView || d.phone === currentView)) {
-        $('abBalance').textContent = '₹' + bal.toFixed(2);
-      }
+      if (d && parseFloat(d.balance) > 0 && (!currentView || d.phone === currentView))
+        $('abBalance').textContent = '₹' + parseFloat(d.balance).toFixed(2);
     });
-
     socket.on('disconnect', function() {
       console.log('[KP] Socket disconnected');
     });
   }
 
-  /* ── Re-auth all saved accounts on connect ── */
-  // Client-side balance fetch using browser (no Railway block)
-  async function fetchBalanceBrowser(acct) {
+  // Browser-side balance fetch (GOA API accessible from browser, not Railway)
+  async function fetchBalanceBrowser() {
+    var acct = accounts.find(function(x){ return x.phone === currentView; });
+    if (!acct) return;
+    var token = acct.webapiToken || acct.lotteryToken;
+    if (!token) return;
     try {
-      var token = acct.webapiToken || acct.lotteryToken;
-      if (!token) return 0;
       var r = await fetch('https://api.goa7777.com/api/webapi/Member/GetUserInfo', {
         method: 'POST',
         headers: {
@@ -637,32 +623,19 @@
           'token': token,
           'Origin': 'https://goagamea.com',
           'Referer': 'https://goagamea.com/',
-          'Accept': 'application/json',
         },
-        body: JSON.stringify({ language:0, random: Math.random().toString(36).slice(2), timestamp: Math.floor(Date.now()/1000), signature:'' })
+        body: JSON.stringify({ language:0, random:Math.random().toString(36).slice(2), timestamp:Math.floor(Date.now()/1000), signature:'' })
       });
       var d = await r.json();
       if (d && d.data) {
         var b = parseFloat(d.data.money || d.data.balance || d.data.wallet || 0);
-        if (b > 0) return b;
+        if (b > 0) $('abBalance').textContent = '₹' + b.toFixed(2);
       }
     } catch(e) {}
-    return 0;
   }
+  setInterval(fetchBalanceBrowser, 15000);
 
-  async function refreshBalanceNow() {
-    var acct = accounts.find(function(x){ return x.phone === currentView; });
-    if (!acct) return;
-    var bal = await fetchBalanceBrowser(acct);
-    if (bal > 0) {
-      $('abBalance').textContent = '₹' + bal.toFixed(2);
-      acct.balance = bal;
-    }
-  }
-
-  // Auto refresh balance every 15s
-  setInterval(function(){ if (currentView) refreshBalanceNow(); }, 15000);
-
+  /* ── Re-auth all saved accounts on connect ── */
   function reAuthAll() {
     if (!socket) return;
     accounts.forEach(function(a) {
@@ -672,9 +645,6 @@
         phone: a.phone,
         pwd: a.pwd || '',
       });
-      setTimeout(function(ph){ return function(){
-        if (socket && socket.connected) socket.emit('refreshBalance', { phone: ph });
-      };}(a.phone), 2500);
     });
     // Switch to current view
     if (currentView) {
@@ -682,8 +652,6 @@
         socket.emit('switchView', { phone: currentView });
       }, 500);
     }
-    // Fetch balance from browser side after 3s
-    setTimeout(refreshBalanceNow, 3000);
   }
 
   /* ═══ Account Tabs ═══ */
@@ -727,9 +695,8 @@
   function renderState(s) {
     if (!s) return;
 
-    // Balance — only update if real value > 0
-    var _bal = parseFloat(s.balance) || 0;
-    if (_bal > 0) $('abBalance').textContent = '₹' + _bal.toFixed(2);
+    // Balance
+    $('abBalance').textContent = '₹' + (s.balance || 0).toFixed(2);
 
     // Engine pill
     var pill = $('abEngine');
@@ -794,7 +761,7 @@
       var pred = s.prediction.pred || 'WAIT';
       predEl.textContent = pred;
       predEl.className = 'ab-hero-pred pred-' + pred.toLowerCase();
-      if (s.prediction.forIssue) $('abPeriod').textContent = '...'+String(s.prediction.forIssue).slice(-5);
+      $('abPeriod').textContent = s.prediction.forIssue ? '...' + s.prediction.forIssue.slice(-5) : '—';
       var subsEl = $('abHeroSubs');
       subsEl.innerHTML = '';
       var rawLog = s.prediction.log || '';
@@ -1253,24 +1220,12 @@
         }
         if (!lt && d.token) lt = d.token;
 
-        // Extract balance directly from login response
-        var _loginBal = parseFloat(
-          d.money || d.balance || d.wallet || d.mainBalance ||
-          (d.userInfo && (d.userInfo.money || d.userInfo.balance)) || 0
-        ) || 0;
-
         var acctEntry = {
           phone: phone,
           lotteryToken: lt,
           webapiToken: d.token || '',
           pwd: pwd,
-          balance: _loginBal,
         };
-
-        // Show balance immediately
-        if (_loginBal > 0) {
-          $('abBalance').textContent = '₹' + _loginBal.toFixed(2);
-        }
 
         /* Regular key users: enforce single account — replace any existing */
         if (!kpIsDefault) accounts = [];
@@ -1511,7 +1466,47 @@
     $('expBar').style.width = '10%';
     $('expProgressText').textContent = 'Requesting ' + totalWant + ' records from server…';
     expLog('info', 'Fetching ' + totalWant + ' records via server (signed + paginated)…');
-    socket.emit('exportHistory', { phone: currentView, totalRecords: totalWant });
+    // Direct browser fetch — bypasses Railway block
+    (async function() {
+      var gameMode = ($('expGame').value || 'WinGo_30S').trim();
+      var urls = {
+        'WinGo_30S':'https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json',
+        'WinGo_1M':'https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json',
+        'WinGo_3M':'https://draw.ar-lottery01.com/WinGo/WinGo_3M/GetHistoryIssuePage.json',
+        'WinGo_5M':'https://draw.ar-lottery01.com/WinGo/WinGo_5M/GetHistoryIssuePage.json',
+      };
+      var baseUrl = urls[gameMode] || urls['WinGo_30S'];
+      var pageSize = 100, maxPages = Math.ceil(totalWant/pageSize);
+      for (var pg = 1; pg <= maxPages; pg++) {
+        var pct = Math.round(pg/maxPages*90);
+        $('expBar').style.width = pct + '%';
+        $('expProgressText').textContent = 'Page '+pg+'/'+maxPages+' — '+_expRecords.length+' records';
+        try {
+          var r = await fetch(baseUrl+'?pageNo='+pg+'&pageSize='+pageSize+'&gameId=1&t='+Date.now(), {cache:'no-store'});
+          var d = await r.json();
+          var list = (d.data&&(d.data.list||d.data.issueList)) || d.list || [];
+          if (!list.length) { expLog('warn','Page '+pg+': empty'); break; }
+          list.forEach(function(item){
+            var n=parseInt(item.number||0);
+            _expRecords.push({ issueNumber:String(item.issueNumber||''), number:n, bs:n>=5?'BIG':'SMALL', colour:n===0||n===5?'Violet':n%2===0?'Red':'Green', openTime:item.startTime||item.openTime||'' });
+          });
+          expLog('ok','Page '+pg+'/'+maxPages+' → '+list.length+' (total: '+_expRecords.length+')');
+          if (_expRecords.length >= totalWant) break;
+        } catch(e) { expLog('err','Page '+pg+' failed: '+e.message); }
+        await new Promise(function(r){setTimeout(r,200);});
+      }
+      $('expBtnFetch').disabled = false;
+      $('expBar').style.width = '100%';
+      if (_expRecords.length === 0) {
+        $('expProgressText').textContent = 'Failed — 0 records';
+        expLog('err','No records. Check game mode.');
+        return;
+      }
+      $('expProgressText').textContent = '✓ Done — '+_expRecords.length+' records';
+      expLog('ok','Export complete: '+_expRecords.length+' records');
+      $('expBtnDownload').style.display = '';
+      expShowStats();
+    })();
   };
 
   function _bindExpHistorySocket() {
